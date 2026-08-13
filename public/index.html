@@ -3,24 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MLBB Draft Tool</title>
+    <title>MLBB Draft Tool | Tournament Simulator</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <h1>MLBB Draft Tool - Server Active!</h1>
-    <p>Status: <span id="connection-status">Connecting to Socket.IO...</span></p>
+    <div class="app-container">
+        <!-- Top Navigation / Header -->
+        <header class="navbar">
+            <div class="logo">MLBB <span>DRAFT TOOL</span></div>
+            <div id="connection-status" class="status-badge disconnected">Offline</div>
+        </header>
 
-    <!-- Include Socket.IO client script provided automatically by the server -->
+        <!-- Main Screen: Room Setup / Landing View -->
+        <main id="setup-screen" class="screen active">
+            <div class="hero-section">
+                <h1>Tournament Ban/Pick Simulator</h1>
+                <p>Rehearse competitive drafts or play live head-to-head multiplayer.</p>
+            </div>
+
+            <div class="card setup-card">
+                <h2>Lobby Options</h2>
+                
+                <!-- Action Tabs -->
+                <div class="btn-group">
+                    <button id="btn-mode-create" class="btn btn-primary">Create Room</button>
+                    <button id="btn-mode-join" class="btn btn-secondary">Join Room</button>
+                </div>
+
+                <!-- Join Room Input (Hidden by default) -->
+                <div id="join-input-group" class="input-group hidden">
+                    <label for="room-id-input">Enter 6-Character Room ID:</label>
+                    <input type="text" id="room-id-input" placeholder="e.g. ROOM99" maxlength="6">
+                </div>
+
+                <!-- Team Side Selection -->
+                <div class="team-selection">
+                    <h3>Select Your Side</h3>
+                    <div class="side-picker">
+                        <label class="radio-card">
+                            <input type="radio" name="team-side" value="blue" checked>
+                            <span class="side-label blue-side">Blue Team (First Pick)</span>
+                        </label>
+                        <label class="radio-card">
+                            <input type="radio" name="team-side" value="red">
+                            <span class="side-label red-side">Red Team (Second Pick)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Enter Lobby Action Button -->
+                <button id="btn-enter-room" class="btn btn-success btn-large">Enter Draft Room</button>
+            </div>
+        </main>
+
+        <!-- Draft Screen Placeholder (Hidden by default) -->
+        <section id="draft-screen" class="screen hidden">
+            <div class="draft-header">
+                <div class="team-banner blue-team">
+                    <h2>Blue Team</h2>
+                    <p class="role-indicator" id="blue-player-label">Player 1</p>
+                </div>
+
+                <div class="draft-status-center">
+                    <div id="room-display-tag" class="room-tag">ROOM: ----</div>
+                    <div class="turn-banner" id="turn-banner-text">Waiting for players...</div>
+                </div>
+
+                <div class="team-banner red-team">
+                    <h2>Red Team</h2>
+                    <p class="role-indicator" id="red-player-label">Player 2</p>
+                </div>
+            </div>
+
+            <div class="placeholder-box">
+                <h3>Draft Engine Interface Placeholder</h3>
+                <p>Hero selection grid, ban list, and real-time turn actions will be rendered here in the next step.</p>
+                <button id="btn-leave-room" class="btn btn-danger">Leave Room</button>
+            </div>
+        </section>
+    </div>
+
+    <!-- External JavaScript File -->
     <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const socket = io();
-        
-        socket.on('connect', () => {
-            document.getElementById('connection-status').innerText = 'Connected! Socket ID: ' + socket.id;
-        });
-
-        socket.on('disconnect', () => {
-            document.getElementById('connection-status').innerText = 'Disconnected from server.';
-        });
-    </script>
+    <script src="/js/hero-data.js"></script>
+    <script src="/js/draft-engine.js"></script>
+    <script src="/js/main.js"></script>
 </body>
 </html>

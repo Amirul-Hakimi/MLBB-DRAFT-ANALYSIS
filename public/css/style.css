@@ -1,0 +1,237 @@
+/* Esports Theme Styles */
+:root {
+    --bg-dark: #0f172a;
+    --bg-card: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --blue-team: #2563eb;
+    --red-team: #dc2626;
+    --accent-gold: #f59e0b;
+    --success: #16a34a;
+    --border-color: #334155;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.app-container {
+    width: 100%;
+    max-width: 1100px;
+}
+
+/* Header Navbar */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 25px;
+}
+
+.logo {
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.logo span {
+    color: var(--accent-gold);
+}
+
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.status-badge.connected {
+    background-color: rgba(22, 163, 74, 0.2);
+    color: #4ade80;
+    border: 1px solid var(--success);
+}
+
+.status-badge.disconnected {
+    background-color: rgba(220, 38, 38, 0.2);
+    color: #f87171;
+    border: 1px solid var(--red-team);
+}
+
+/* Screen Management */
+.screen {
+    display: none;
+}
+
+.screen.active {
+    display: block;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Hero Section */
+.hero-section {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.hero-section h1 {
+    font-size: 2.2rem;
+    margin-bottom: 8px;
+}
+
+.hero-section p {
+    color: var(--text-muted);
+}
+
+/* Setup Card */
+.setup-card {
+    background-color: var(--bg-card);
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    max-width: 550px;
+    margin: 0 auto;
+}
+
+.setup-card h2 {
+    margin-bottom: 20px;
+    font-size: 1.3rem;
+    text-align: center;
+}
+
+.btn-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-group input {
+    padding: 12px;
+    background-color: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: 6px;
+    font-size: 1rem;
+    text-transform: uppercase;
+}
+
+/* Team Side Selector */
+.team-selection {
+    margin-bottom: 25px;
+}
+
+.team-selection h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+}
+
+.side-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.radio-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background-color: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.side-label.blue-side { color: #60a5fa; font-weight: 600; }
+.side-label.red-side { color: #f87171; font-weight: 600; }
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn:hover { opacity: 0.9; }
+
+.btn-primary { background-color: var(--blue-team); color: white; }
+.btn-secondary { background-color: var(--border-color); color: white; }
+.btn-success { background-color: var(--success); color: white; }
+.btn-danger { background-color: var(--red-team); color: white; }
+.btn-large { font-size: 1.1rem; padding: 14px; }
+
+/* Draft Screen Layout */
+.draft-header {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.team-banner {
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.team-banner.blue-team { background-color: rgba(37, 99, 235, 0.2); border: 1px solid var(--blue-team); }
+.team-banner.red-team { background-color: rgba(220, 38, 38, 0.2); border: 1px solid var(--red-team); }
+
+.draft-status-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    padding: 15px;
+}
+
+.room-tag {
+    font-weight: 700;
+    color: var(--accent-gold);
+    margin-bottom: 5px;
+}
+
+.placeholder-box {
+    background-color: var(--bg-card);
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 60px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
