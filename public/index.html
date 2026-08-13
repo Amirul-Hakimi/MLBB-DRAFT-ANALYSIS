@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLBB Draft Tool</title>
+</head>
+<body>
+    <h1>MLBB Draft Tool - Server Active!</h1>
+    <p>Status: <span id="connection-status">Connecting to Socket.IO...</span></p>
+
+    <!-- Include Socket.IO client script provided automatically by the server -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        
+        socket.on('connect', () => {
+            document.getElementById('connection-status').innerText = 'Connected! Socket ID: ' + socket.id;
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').innerText = 'Disconnected from server.';
+        });
+    </script>
+</body>
+</html>
