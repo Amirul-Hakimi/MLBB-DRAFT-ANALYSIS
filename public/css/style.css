@@ -235,3 +235,125 @@ body {
     align-items: center;
     gap: 15px;
 }
+
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    background: var(--bg-card);
+    padding: 12px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.filter-bar input {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-dark);
+    color: var(--text-main);
+    width: 220px;
+}
+
+.lane-tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.lane-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-dark);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.lane-btn.active {
+    background: var(--blue-team);
+    color: white;
+    border-color: var(--blue-team);
+}
+
+/* Hero Grid */
+.hero-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 5px;
+    margin-bottom: 20px;
+}
+
+/* Hero Cards */
+.hero-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.hero-card:hover:not(.disabled) {
+    transform: translateY(-3px);
+    border-color: var(--accent-gold);
+}
+
+.hero-card.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    filter: grayscale(100%);
+}
+
+.hero-card .hero-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.hero-card .lane-tags {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.tag {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    background: var(--bg-dark);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+
+/* Turn Banner Styles */
+.turn-banner {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--accent-gold);
+}
+
+.phase-subtext {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.team-banner.active-turn {
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+    border-color: var(--accent-gold) !important;
+}
+
+/* Team Lists */
+.bans-list { font-size: 0.85rem; color: #f87171; margin-top: 5px; }
+.picks-list { list-style: none; margin-top: 10px; text-align: left; }
+.picks-list li { padding: 4px 0; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }

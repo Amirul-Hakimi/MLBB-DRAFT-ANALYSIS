@@ -56,31 +56,49 @@
             </div>
         </main>
 
-        <!-- Draft Screen Placeholder (Hidden by default) -->
-        <section id="draft-screen" class="screen hidden">
-            <div class="draft-header">
-                <div class="team-banner blue-team">
-                    <h2>Blue Team</h2>
-                    <p class="role-indicator" id="blue-player-label">Player 1</p>
-                </div>
+        <!-- Draft Screen -->
+<section id="draft-screen" class="screen hidden">
+    <!-- Turn Banner & Status -->
+    <div class="draft-header">
+        <div class="team-banner blue-team" id="team-a-box">
+            <h2>Blue Team (A)</h2>
+            <div id="blue-bans" class="bans-list">Bans: </div>
+            <ul id="blue-picks" class="picks-list"></ul>
+        </div>
 
-                <div class="draft-status-center">
-                    <div id="room-display-tag" class="room-tag">ROOM: ----</div>
-                    <div class="turn-banner" id="turn-banner-text">Waiting for players...</div>
-                </div>
+        <div class="draft-status-center">
+            <div id="room-display-tag" class="room-tag">ROOM: ----</div>
+            <div id="turn-banner-text" class="turn-banner">Turn 1: Team A Ban</div>
+            <div id="phase-banner-text" class="phase-subtext">Ban Phase 1</div>
+        </div>
 
-                <div class="team-banner red-team">
-                    <h2>Red Team</h2>
-                    <p class="role-indicator" id="red-player-label">Player 2</p>
-                </div>
-            </div>
+        <div class="team-banner red-team" id="team-b-box">
+            <h2>Red Team (B)</h2>
+            <div id="red-bans" class="bans-list">Bans: </div>
+            <ul id="red-picks" class="picks-list"></ul>
+        </div>
+    </div>
 
-            <div class="placeholder-box">
-                <h3>Draft Engine Interface Placeholder</h3>
-                <p>Hero selection grid, ban list, and real-time turn actions will be rendered here in the next step.</p>
-                <button id="btn-leave-room" class="btn btn-danger">Leave Room</button>
-            </div>
-        </section>
+    <!-- Controls: Search & Filters -->
+    <div class="filter-bar">
+        <input type="text" id="hero-search" placeholder="Search hero by name..." />
+        <div class="lane-tabs">
+            <button class="lane-btn active" data-lane="ALL">ALL</button>
+            <button class="lane-btn" data-lane="EXP">EXP</button>
+            <button class="lane-btn" data-lane="Jungle">Jungle</button>
+            <button class="lane-btn" data-lane="Mid">Mid</button>
+            <button class="lane-btn" data-lane="Gold">Gold</button>
+            <button class="lane-btn" data-lane="Roam">Roam</button>
+        </div>
+    </div>
+
+    <!-- Hero Grid Container -->
+    <div id="hero-grid" class="hero-grid"></div>
+
+    <div class="action-footer">
+        <button id="btn-leave-room" class="btn btn-danger">Reset & Leave</button>
+    </div>
+</section>
     </div>
 
     <!-- External JavaScript File -->
