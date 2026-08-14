@@ -124,3 +124,57 @@ resetDraft();
 // At the bottom of draft-engine.js
 window.resetDraft = resetDraft;
 window.executeAction = executeAction;
+
+// --- RULE-BASED RECOMMENDATION ENGINE ---
+const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
+
+function getRecommendations() {
+    if (draftState.isComplete) return { type: 'complete', list: [], neededLanes: [] };
+
+    const turn = getCurrentTurn();
+    const availableHeroes = HERO_DATASET.filter(hero => !isHeroUnavailable(hero.id));
+
+    // 1. BAN TURN RECOMMENDATIONS
+    if (turn.action === 'ban') {
+        const sorted = [...availableHeroes].sort((a, b) => b.banWeight - a.banWeight);
+        return {
+            type: 'ban',
+            neededLanes: [],
+            list: sorted.slice(0, 6)
+        };
+    }
+
+    // 2. PICK TURN RECOMMENDATIONS
+    const teamPicks = draftState.picks[turn.team];
+    
+    // Collect filled lanes from team's current picks
+    const filledLanes = new Set();
+    teamPicks.forEach(hero => {
+        hero.lanes.forEach(lane => filledLanes.add(lane));
+    });
+
+    // Find missing lanes
+    const neededLanes = ALL_LANES.filter(lane => !filledLanes.has(lane));
+
+    // Filter available heroes that fill at least one missing lane
+    let laneFitHeroes = availableHeroes.filter(hero => 
+        hero.lanes.some(lane => neededLanes.includes(lane))
+    );
+
+    // Fallback if all lanes filled or no direct matches
+    if (laneFitHeroes.length === 0) {
+        laneFitHeroes = availableHeroes;
+    }
+
+    // Sort by pickWeight
+    const sorted = [...laneFitHeroes].sort((a, b) => b.pickWeight - a.pickWeight);
+
+    return {
+        type: 'pick',
+        neededLanes: neededLanes,
+        list: sorted.slice(0, 6)
+    };
+}
+
+// Expose helper globally
+window.getRecommendations = getRecommendations;

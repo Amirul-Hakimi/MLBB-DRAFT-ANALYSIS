@@ -24,19 +24,16 @@
             <div class="card setup-card">
                 <h2>Lobby Options</h2>
                 
-                <!-- Action Tabs -->
                 <div class="btn-group">
                     <button id="btn-mode-create" class="btn btn-primary">Create Room</button>
                     <button id="btn-mode-join" class="btn btn-secondary">Join Room</button>
                 </div>
 
-                <!-- Join Room Input (Hidden by default) -->
                 <div id="join-input-group" class="input-group hidden">
                     <label for="room-id-input">Enter 6-Character Room ID:</label>
                     <input type="text" id="room-id-input" placeholder="e.g. ROOM99" maxlength="6">
                 </div>
 
-                <!-- Team Side Selection -->
                 <div class="team-selection">
                     <h3>Select Your Side</h3>
                     <div class="side-picker">
@@ -51,57 +48,61 @@
                     </div>
                 </div>
 
-                <!-- Enter Lobby Action Button -->
                 <button id="btn-enter-room" class="btn btn-success btn-large">Enter Draft Room</button>
             </div>
         </main>
 
         <!-- Draft Screen -->
-<section id="draft-screen" class="screen hidden">
-    <!-- Turn Banner & Status -->
-    <div class="draft-header">
-        <div class="team-banner blue-team" id="team-a-box">
-            <h2>Blue Team (A)</h2>
-            <div id="blue-bans" class="bans-list">Bans: </div>
-            <ul id="blue-picks" class="picks-list"></ul>
-        </div>
+        <section id="draft-screen" class="screen hidden">
+            <div class="draft-header">
+                <div class="team-banner blue-team" id="team-a-box">
+                    <h2>Blue Team (A)</h2>
+                    <div id="blue-bans" class="bans-list">Bans: </div>
+                    <ul id="blue-picks" class="picks-list"></ul>
+                </div>
 
-        <div class="draft-status-center">
-            <div id="room-display-tag" class="room-tag">ROOM: ----</div>
-            <div id="turn-banner-text" class="turn-banner">Turn 1: Team A Ban</div>
-            <div id="phase-banner-text" class="phase-subtext">Ban Phase 1</div>
-        </div>
+                <div class="draft-status-center">
+                    <div id="room-display-tag" class="room-tag">ROOM: ----</div>
+                    <div id="turn-banner-text" class="turn-banner">Turn 1: Team A Ban</div>
+                    <div id="phase-banner-text" class="phase-subtext">Ban Phase 1</div>
+                </div>
 
-        <div class="team-banner red-team" id="team-b-box">
-            <h2>Red Team (B)</h2>
-            <div id="red-bans" class="bans-list">Bans: </div>
-            <ul id="red-picks" class="picks-list"></ul>
-        </div>
+                <div class="team-banner red-team" id="team-b-box">
+                    <h2>Red Team (B)</h2>
+                    <div id="red-bans" class="bans-list">Bans: </div>
+                    <ul id="red-picks" class="picks-list"></ul>
+                </div>
+            </div>
+
+            <div class="recommendation-panel" id="recommendation-panel">
+                <div class="rec-header">
+                    <span class="rec-icon">⭐</span>
+                    <span id="rec-title-text" class="rec-title">Recommended Actions</span>
+                </div>
+                <div id="rec-chips-container" class="rec-chips-container"></div>
+            </div>
+
+            <div class="filter-bar">
+                <input type="text" id="hero-search" placeholder="Search hero by name..." />
+                <div class="lane-tabs">
+                    <button class="lane-btn active" data-lane="ALL">ALL</button>
+                    <button class="lane-btn" data-lane="EXP">EXP</button>
+                    <button class="lane-btn" data-lane="Jungle">Jungle</button>
+                    <button class="lane-btn" data-lane="Mid">Mid</button>
+                    <button class="lane-btn" data-lane="Gold">Gold</button>
+                    <button class="lane-btn" data-lane="Roam">Roam</button>
+                </div>
+            </div>
+
+            <div id="hero-grid" class="hero-grid"></div>
+
+            <div class="action-footer">
+                <button id="btn-leave-room" class="btn btn-danger">Reset & Leave</button>
+            </div>
+        </section>
     </div>
 
-    <!-- Controls: Search & Filters -->
-    <div class="filter-bar">
-        <input type="text" id="hero-search" placeholder="Search hero by name..." />
-        <div class="lane-tabs">
-            <button class="lane-btn active" data-lane="ALL">ALL</button>
-            <button class="lane-btn" data-lane="EXP">EXP</button>
-            <button class="lane-btn" data-lane="Jungle">Jungle</button>
-            <button class="lane-btn" data-lane="Mid">Mid</button>
-            <button class="lane-btn" data-lane="Gold">Gold</button>
-            <button class="lane-btn" data-lane="Roam">Roam</button>
-        </div>
-    </div>
-
-    <!-- Hero Grid Container -->
-    <div id="hero-grid" class="hero-grid"></div>
-
-    <div class="action-footer">
-        <button id="btn-leave-room" class="btn btn-danger">Reset & Leave</button>
-    </div>
-</section>
-    </div>
-
-    <!-- External JavaScript File -->
+    <!-- Scripts in Dependency Order -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/hero-data.js"></script>
     <script src="/js/draft-engine.js"></script>
