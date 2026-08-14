@@ -1,5 +1,17 @@
-// Establish Socket.IO Connection
+// Establish Socket Connection
 const socket = io();
+
+// Generate or retrieve persistent Player Token for this browser tab session
+function getOrCreatePlayerToken() {
+    let token = sessionStorage.getItem('mlbb_player_token');
+    if (!token) {
+        token = 'PLR-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+        sessionStorage.setItem('mlbb_player_token', token);
+    }
+    return token;
+}
+
+const myPlayerToken = getOrCreatePlayerToken();
 
 // DOM References
 const connectionStatus = document.getElementById('connection-status');
@@ -36,10 +48,20 @@ let currentLaneFilter = 'ALL';
 window.myAssignedTeam = null;
 window.currentRoomId = null;
 
-// Socket Status Events
+// Socket Connection Status Events
 socket.on('connect', () => {
     connectionStatus.innerText = 'Online';
     connectionStatus.className = 'status-badge connected';
+
+    // AUTO-RECONNECT CHECK: If page refreshed while in an active room
+    const savedRoomId = sessionStorage.getItem('mlbb_active_room');
+    if (savedRoomId && !window.currentRoomId) {
+        console.log(`Attempting auto-reconnect to room: ${savedRoomId}`);
+        socket.emit('join_room', {
+            targetRoomId: savedRoomId,
+            playerToken: myPlayerToken
+        });
+    }
 });
 
 socket.on('disconnect', () => {
@@ -47,10 +69,14 @@ socket.on('disconnect', () => {
     connectionStatus.className = 'status-badge disconnected';
 });
 
-// AUTHORITATIVE STATE RECEIVER
+// Authoritative State Receiver
 socket.on('draft_updated', ({ draftState: serverState }) => {
     draftState = serverState;
     updateUI();
+});
+
+socket.on('room_announcement', (data) => {
+    console.log(`[ANNOUNCEMENT] ${data.message}`);
 });
 
 socket.on('draft_error', (data) => {
@@ -59,10 +85,14 @@ socket.on('draft_error', (data) => {
 
 socket.on('room_error', (data) => {
     alert(`Room Error: ${data.message}`);
+    // Clear invalid stored session if room expired
+    sessionStorage.removeItem('mlbb_active_room');
+    showSetupScreen();
 });
 
 socket.on('player_left', (data) => {
-    alert(data.message);
+    turnBannerText.innerText = 'Opponent Disconnected!';
+    phaseBannerText.innerText = data.message;
 });
 
 // Lobby Navigation Events
@@ -82,18 +112,22 @@ btnModeJoin.addEventListener('click', () => {
 
 btnEnterRoom.addEventListener('click', () => {
     if (currentMode === 'create') {
-        socket.emit('create_room');
+        socket.emit('create_room', { playerToken: myPlayerToken });
     } else {
         const inputCode = roomIdInput.value.trim().toUpperCase();
         if (!inputCode) {
             alert('Please enter a valid 6-character Room ID.');
             return;
         }
-        socket.emit('join_room', inputCode);
+        socket.emit('join_room', {
+            targetRoomId: inputCode,
+            playerToken: myPlayerToken
+        });
     }
 });
 
 btnLeaveRoom.addEventListener('click', () => {
+    sessionStorage.removeItem('mlbb_active_room');
     location.reload();
 });
 
@@ -102,6 +136,7 @@ socket.on('room_created', (data) => {
     window.myAssignedTeam = data.yourTeam;
     draftState = data.draftState;
 
+    sessionStorage.setItem('mlbb_active_room', data.roomId);
     showDraftScreen(data.roomId);
     turnBannerText.innerText = 'Waiting for Opponent...';
     phaseBannerText.innerText = `Share Code: ${data.roomId} (You: Team A)`;
@@ -112,6 +147,7 @@ socket.on('room_joined', (data) => {
     window.myAssignedTeam = data.yourTeam;
     draftState = data.draftState;
 
+    sessionStorage.setItem('mlbb_active_room', data.roomId);
     showDraftScreen(data.roomId);
 });
 
@@ -292,4 +328,11 @@ function showDraftScreen(roomId) {
     draftScreen.classList.remove('hidden');
     draftScreen.classList.add('active');
     updateUI();
+}
+
+function showSetupScreen() {
+    draftScreen.classList.add('hidden');
+    draftScreen.classList.remove('active');
+    setupScreen.classList.remove('hidden');
+    setupScreen.classList.add('active');
 }

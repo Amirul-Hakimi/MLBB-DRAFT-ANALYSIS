@@ -39,9 +39,8 @@ const HERO_DATASET = [
     { id: "brody", name: "Brody", lanes: ["Gold"] }
 ];
 
-// Exact 20-Step Draft Sequence Enforced by Server
+// 20-Step Draft Sequence Rules
 const DRAFT_SEQUENCE = [
-    // Ban Phase 1 (6 actions: A, B, A, B, A, B)
     { turn: 1,  phase: 'Ban Phase 1',  action: 'ban',  team: 'A' },
     { turn: 2,  phase: 'Ban Phase 1',  action: 'ban',  team: 'B' },
     { turn: 3,  phase: 'Ban Phase 1',  action: 'ban',  team: 'A' },
@@ -49,7 +48,6 @@ const DRAFT_SEQUENCE = [
     { turn: 5,  phase: 'Ban Phase 1',  action: 'ban',  team: 'A' },
     { turn: 6,  phase: 'Ban Phase 1',  action: 'ban',  team: 'B' },
 
-    // Pick Phase 1 (6 actions: A, B, B, A, A, B)
     { turn: 7,  phase: 'Pick Phase 1', action: 'pick', team: 'A' },
     { turn: 8,  phase: 'Pick Phase 1', action: 'pick', team: 'B' },
     { turn: 9,  phase: 'Pick Phase 1', action: 'pick', team: 'B' },
@@ -57,21 +55,19 @@ const DRAFT_SEQUENCE = [
     { turn: 11, phase: 'Pick Phase 1', action: 'pick', team: 'A' },
     { turn: 12, phase: 'Pick Phase 1', action: 'pick', team: 'B' },
 
-    // Ban Phase 2 (4 actions: B, A, B, A)
     { turn: 13, phase: 'Ban Phase 2',  action: 'ban',  team: 'B' },
     { turn: 14, phase: 'Ban Phase 2',  action: 'ban',  team: 'A' },
     { turn: 15, phase: 'Ban Phase 2',  action: 'ban',  team: 'B' },
     { turn: 16, phase: 'Ban Phase 2',  action: 'ban',  team: 'A' },
 
-    // Pick Phase 2 (4 actions: B, A, A, B)
     { turn: 17, phase: 'Pick Phase 2', action: 'pick', team: 'B' },
     { turn: 18, phase: 'Pick Phase 2', action: 'pick', team: 'A' },
     { turn: 19, phase: 'Pick Phase 2', action: 'pick', team: 'A' },
     { turn: 20, phase: 'Pick Phase 2', action: 'pick', team: 'B' }
 ];
 
-// Active Rooms State Store
 const activeRooms = {};
+const ABANDON_TIMEOUT_MS = 60000; // 60 seconds grace period
 
 function generateUniqueRoomId() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -98,23 +94,25 @@ function createFreshDraftState() {
 io.on('connection', (socket) => {
     console.log(`[CONNECTED] Socket ID: ${socket.id}`);
 
-    // CREATE ROOM
-    socket.on('create_room', () => {
+    // --- CREATE ROOM ---
+    socket.on('create_room', ({ playerToken }) => {
         const roomId = generateUniqueRoomId();
 
         activeRooms[roomId] = {
             roomId: roomId,
             players: {
-                A: { socketId: socket.id },
+                A: { socketId: socket.id, playerToken: playerToken, connected: true },
                 B: null
             },
             status: 'waiting',
+            cleanupTimer: null,
             draftState: createFreshDraftState()
         };
 
         socket.join(roomId);
         socket.currentRoomId = roomId;
         socket.assignedTeam = 'A';
+        socket.playerToken = playerToken;
 
         socket.emit('room_created', {
             roomId: roomId,
@@ -123,33 +121,79 @@ io.on('connection', (socket) => {
         });
     });
 
-    // JOIN ROOM
-    socket.on('join_room', (targetRoomId) => {
+    // --- JOIN / RECONNECT ROOM ---
+    socket.on('join_room', ({ targetRoomId, playerToken }) => {
         const cleanRoomId = targetRoomId.trim().toUpperCase();
         const room = activeRooms[cleanRoomId];
 
         if (!room) {
-            socket.emit('room_error', { message: `Room '${cleanRoomId}' does not exist.` });
+            socket.emit('room_error', { message: `Room '${cleanRoomId}' does not exist or expired.` });
             return;
         }
 
+        // Check if this is a RECONNECTING existing player
+        let existingTeam = null;
+        if (room.players.A && room.players.A.playerToken === playerToken) existingTeam = 'A';
+        if (room.players.B && room.players.B.playerToken === playerToken) existingTeam = 'B';
+
+        if (existingTeam) {
+            // RECONNECT FLOW: Re-bind new socket.id to existing team slot
+            room.players[existingTeam].socketId = socket.id;
+            room.players[existingTeam].connected = true;
+
+            socket.join(cleanRoomId);
+            socket.currentRoomId = cleanRoomId;
+            socket.assignedTeam = existingTeam;
+            socket.playerToken = playerToken;
+
+            // Cancel cleanup timer if active
+            if (room.cleanupTimer) {
+                clearTimeout(room.cleanupTimer);
+                room.cleanupTimer = null;
+                console.log(`[RECONNECTED] Room ${cleanRoomId}: Cleanup timer cancelled.`);
+            }
+
+            console.log(`[RECONNECTED] Socket ${socket.id} restored as Team ${existingTeam} in Room ${cleanRoomId}`);
+
+            // Send full authoritative state back to reconnecting player
+            socket.emit('room_joined', {
+                roomId: cleanRoomId,
+                yourTeam: existingTeam,
+                draftState: room.draftState
+            });
+
+            // Notify room that player has restored connection
+            io.to(cleanRoomId).emit('draft_updated', {
+                roomId: cleanRoomId,
+                draftState: room.draftState,
+                status: 'ready'
+            });
+
+            io.to(cleanRoomId).emit('room_announcement', {
+                message: `Team ${existingTeam} reconnected!`
+            });
+            return;
+        }
+
+        // NEW PLAYER JOIN FLOW
         if (room.players.A && room.players.B) {
-            socket.emit('room_error', { message: `Room '${cleanRoomId}' is full (Max 2 players).` });
+            socket.emit('room_error', { message: `Room '${cleanRoomId}' is full.` });
             return;
         }
 
         let assignedTeam = 'B';
         if (!room.players.A) {
             assignedTeam = 'A';
-            room.players.A = { socketId: socket.id };
+            room.players.A = { socketId: socket.id, playerToken: playerToken, connected: true };
         } else {
-            room.players.B = { socketId: socket.id };
+            room.players.B = { socketId: socket.id, playerToken: playerToken, connected: true };
         }
 
         room.status = 'ready';
         socket.join(cleanRoomId);
         socket.currentRoomId = cleanRoomId;
         socket.assignedTeam = assignedTeam;
+        socket.playerToken = playerToken;
 
         socket.emit('room_joined', {
             roomId: cleanRoomId,
@@ -164,45 +208,37 @@ io.on('connection', (socket) => {
         });
     });
 
-    // AUTHORITATIVE ACTION VALIDATION
+    // --- AUTHORITATIVE HERO SELECTION ---
     socket.on('select_hero', ({ heroId }) => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
 
         if (!room) {
-            socket.emit('draft_error', { message: 'Room session not found.' });
+            socket.emit('draft_error', { message: 'Room session expired or not found.' });
             return;
         }
 
         const playerTeam = socket.assignedTeam;
-        if (!playerTeam) {
-            socket.emit('draft_error', { message: 'You are not assigned to a team.' });
-            return;
-        }
-
         const draft = room.draftState;
 
         if (draft.isComplete) {
-            socket.emit('draft_error', { message: 'The draft is already complete!' });
+            socket.emit('draft_error', { message: 'Draft is already complete!' });
             return;
         }
 
         const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
 
-        // Guard: Check Turn Ownership
         if (currentTurn.team !== playerTeam) {
             socket.emit('draft_error', { message: `Not your turn! Waiting for Team ${currentTurn.team}.` });
             return;
         }
 
-        // Guard: Check Hero Existence
         const hero = HERO_DATASET.find(h => h.id === heroId);
         if (!hero) {
             socket.emit('draft_error', { message: `Invalid Hero ID: ${heroId}` });
             return;
         }
 
-        // Guard: Check Hero Availability
         const allBanned = [...draft.bans.A, ...draft.bans.B].map(h => h.id);
         const allPicked = [...draft.picks.A, ...draft.picks.B].map(h => h.id);
         if (allBanned.includes(heroId) || allPicked.includes(heroId)) {
@@ -210,7 +246,6 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // EXECUTE AUTHORITATIVE STATE UPDATE
         if (currentTurn.action === 'ban') {
             draft.bans[playerTeam].push(hero);
         } else {
@@ -225,16 +260,12 @@ io.on('connection', (socket) => {
             hero: hero.name
         });
 
-        // Server advances turn index
         draft.currentTurnIndex++;
 
         if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
             draft.isComplete = true;
         }
 
-        console.log(`[TURN ${currentTurn.turn}] Room ${roomId}: Team ${playerTeam} ${currentTurn.action}ed ${hero.name}`);
-
-        // Broadcast master state to both room sockets
         io.to(roomId).emit('draft_updated', {
             roomId: roomId,
             draftState: draft,
@@ -242,6 +273,7 @@ io.on('connection', (socket) => {
         });
     });
 
+    // --- DISCONNECT & RECONNECT TIMEOUT ---
     socket.on('disconnect', () => {
         const roomId = socket.currentRoomId;
         if (!roomId || !activeRooms[roomId]) return;
@@ -249,22 +281,36 @@ io.on('connection', (socket) => {
         const room = activeRooms[roomId];
         const team = socket.assignedTeam;
 
-        if (team === 'A') room.players.A = null;
-        if (team === 'B') room.players.B = null;
+        if (team && room.players[team]) {
+            room.players[team].connected = false;
+        }
 
-        if (!room.players.A && !room.players.B) {
-            delete activeRooms[roomId];
-            console.log(`[ROOM DESTROYED] ${roomId}`);
-        } else {
-            io.to(roomId).emit('player_left', {
-                message: `Team ${team} player disconnected. Draft paused.`,
-                status: 'paused'
-            });
+        console.log(`[DISCONNECT] Team ${team} (Socket ${socket.id}) disconnected from Room ${roomId}`);
+
+        // Notify remaining player that opponent disconnected
+        io.to(roomId).emit('player_left', {
+            message: `Team ${team} disconnected. Waiting 60s for reconnection...`,
+            status: 'paused'
+        });
+
+        // Check if both players are disconnected
+        const aConnected = room.players.A && room.players.A.connected;
+        const bConnected = room.players.B && room.players.B.connected;
+
+        // If no one is connected, start 60s room destruction timer
+        if (!aConnected && !bConnected) {
+            if (!room.cleanupTimer) {
+                console.log(`[CLEANUP SCHEDULED] Room ${roomId} will be deleted in 60s if abandoned.`);
+                room.cleanupTimer = setTimeout(() => {
+                    delete activeRooms[roomId];
+                    console.log(`[ROOM DELETED] Room ${roomId} destroyed due to inactivity.`);
+                }, ABANDON_TIMEOUT_MS);
+            }
         }
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`MLBB Authoritative Draft Server running at http://localhost:3000`);
+    console.log(`MLBB Authoritative Server running at http://localhost:3000`);
 });
