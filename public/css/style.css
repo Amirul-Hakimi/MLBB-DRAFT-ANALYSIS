@@ -1,53 +1,52 @@
-/* Esports Theme Styles */
+/* =========================================================================
+   GLOBAL THEME VARIABLES & RESET
+   ========================================================================= */
 :root {
     --bg-dark: #0f172a;
     --bg-card: #1e293b;
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
+    --border-color: #334155;
     --blue-team: #2563eb;
     --red-team: #dc2626;
     --accent-gold: #f59e0b;
-    --success: #16a34a;
-    --border-color: #334155;
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: var(--bg-dark);
     color: var(--text-main);
+    padding: 20px;
     display: flex;
     justify-content: center;
-    min-height: 100vh;
-    padding: 20px;
 }
 
 .app-container {
     width: 100%;
-    max-width: 1100px;
+    max-width: 1200px;
 }
 
-/* Header Navbar */
+/* NAVBAR */
 .navbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background-color: var(--bg-card);
+    background: var(--bg-card);
     border-radius: 8px;
     border: 1px solid var(--border-color);
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .logo {
     font-size: 1.4rem;
     font-weight: 800;
-    letter-spacing: 1px;
 }
 
 .logo span {
@@ -55,45 +54,46 @@ body {
 }
 
 .status-badge {
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
 }
 
 .status-badge.connected {
-    background-color: rgba(22, 163, 74, 0.2);
+    background: rgba(34, 197, 94, 0.2);
     color: #4ade80;
-    border: 1px solid var(--success);
+    border: 1px solid #22c55e;
 }
 
 .status-badge.disconnected {
-    background-color: rgba(220, 38, 38, 0.2);
+    background: rgba(239, 68, 68, 0.2);
     color: #f87171;
-    border: 1px solid var(--red-team);
+    border: 1px solid #ef4444;
 }
 
-/* Screen Management */
-.screen {
-    display: none;
-}
-
-.screen.active {
-    display: block;
-}
-
-.hidden {
+/* SCREENS & CARDS */
+.screen.hidden {
     display: none !important;
 }
 
-/* Hero Section */
+.setup-card {
+    background: var(--bg-card);
+    padding: 30px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    max-width: 500px;
+    margin: 40px auto;
+    text-align: center;
+}
+
 .hero-section {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .hero-section h1 {
-    font-size: 2.2rem;
+    font-size: 2rem;
     margin-bottom: 8px;
 }
 
@@ -101,246 +101,97 @@ body {
     color: var(--text-muted);
 }
 
-/* Setup Card */
-.setup-card {
-    background-color: var(--bg-card);
-    padding: 30px;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    max-width: 550px;
-    margin: 0 auto;
+/* BUTTONS & INPUTS */
+.btn {
+    padding: 10px 18px;
+    border-radius: 6px;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
-.setup-card h2 {
-    margin-bottom: 20px;
-    font-size: 1.3rem;
-    text-align: center;
-}
+.btn-primary { background: var(--blue-team); color: white; }
+.btn-secondary { background: var(--border-color); color: white; }
+.btn-success { background: #16a34a; color: white; }
+.btn-danger { background: var(--red-team); color: white; }
+.btn-large { width: 100%; padding: 12px; font-size: 1rem; margin-top: 15px; }
 
 .btn-group {
     display: flex;
     gap: 10px;
-    margin-bottom: 20px;
+    justify-content: center;
+    margin-bottom: 15px;
 }
 
 .input-group {
-    margin-bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
 }
 
 .input-group input {
-    padding: 12px;
-    background-color: var(--bg-dark);
-    border: 1px solid var(--border-color);
-    color: var(--text-main);
+    width: 100%;
+    padding: 10px;
     border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-dark);
+    color: white;
     font-size: 1rem;
     text-transform: uppercase;
 }
 
-/* Team Side Selector */
-.team-selection {
-    margin-bottom: 25px;
-}
-
-.team-selection h3 {
-    font-size: 1rem;
-    margin-bottom: 12px;
-    color: var(--text-muted);
-}
-
-.side-picker {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.radio-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background-color: var(--bg-dark);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.side-label.blue-side { color: #60a5fa; font-weight: 600; }
-.side-label.red-side { color: #f87171; font-weight: 600; }
-
-/* Buttons */
-.btn {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-
-.btn:hover { opacity: 0.9; }
-
-.btn-primary { background-color: var(--blue-team); color: white; }
-.btn-secondary { background-color: var(--border-color); color: white; }
-.btn-success { background-color: var(--success); color: white; }
-.btn-danger { background-color: var(--red-team); color: white; }
-.btn-large { font-size: 1.1rem; padding: 14px; }
-
-/* Draft Screen Layout */
+/* DRAFT HEADER & TEAM BANNERS */
 .draft-header {
     display: grid;
-    grid-template-columns: 1fr 1.5fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 15px;
     margin-bottom: 20px;
+    text-align: center;
 }
 
 .team-banner {
-    padding: 20px;
+    background: var(--bg-card);
+    padding: 15px;
     border-radius: 8px;
-    text-align: center;
+    border: 2px solid var(--border-color);
 }
 
-.team-banner.blue-team { background-color: rgba(37, 99, 235, 0.2); border: 1px solid var(--blue-team); }
-.team-banner.red-team { background-color: rgba(220, 38, 38, 0.2); border: 1px solid var(--red-team); }
+.team-banner.blue-team { border-color: var(--blue-team); }
+.team-banner.red-team { border-color: var(--red-team); }
+
+.team-banner.active-turn {
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+    border-color: var(--accent-gold) !important;
+}
 
 .draft-status-center {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--bg-card);
+    background: var(--bg-card);
+    padding: 15px;
     border-radius: 8px;
     border: 1px solid var(--border-color);
-    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .room-tag {
-    font-weight: 700;
+    font-size: 0.8rem;
     color: var(--accent-gold);
-    margin-bottom: 5px;
-}
-
-.placeholder-box {
-    background-color: var(--bg-card);
-    border: 2px dashed var(--border-color);
-    border-radius: 12px;
-    padding: 60px 20px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-}
-
-/* Filter Bar */
-.filter-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 20px;
-    background: var(--bg-card);
-    padding: 12px 18px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-}
-
-.filter-bar input {
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-dark);
-    color: var(--text-main);
-    width: 220px;
-}
-
-.lane-tabs {
-    display: flex;
-    gap: 8px;
-}
-
-.lane-btn {
-    padding: 6px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-dark);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-weight: 600;
-}
-
-.lane-btn.active {
-    background: var(--blue-team);
-    color: white;
-    border-color: var(--blue-team);
-}
-
-/* Hero Grid */
-.hero-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
-    max-height: 480px;
-    overflow-y: auto;
-    padding-right: 5px;
-    margin-bottom: 20px;
-}
-
-/* Hero Cards */
-.hero-card {
-    background: var(--bg-card);
-    border: 2px solid var(--border-color);
-    border-radius: 8px;
-    padding: 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-.hero-card:hover:not(.disabled) {
-    transform: translateY(-3px);
-    border-color: var(--accent-gold);
-}
-
-.hero-card.disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-    filter: grayscale(100%);
-}
-
-.hero-card .hero-name {
-    font-size: 0.95rem;
     font-weight: 700;
-    margin-bottom: 6px;
 }
 
-.hero-card .lane-tags {
-    display: flex;
-    justify-content: center;
-    gap: 4px;
-    flex-wrap: wrap;
-}
-
-.tag {
-    font-size: 0.65rem;
-    padding: 2px 5px;
-    background: var(--bg-dark);
-    border-radius: 4px;
-    color: var(--text-muted);
-}
-
-/* Turn Banner Styles */
 .turn-banner {
     font-size: 1.1rem;
     font-weight: 800;
-    color: var(--accent-gold);
+    margin: 5px 0;
 }
 
 .phase-subtext {
@@ -348,18 +199,11 @@ body {
     color: var(--text-muted);
 }
 
-.team-banner.active-turn {
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
-    border-color: var(--accent-gold) !important;
-}
-
-/* Team Lists */
 .bans-list { font-size: 0.85rem; color: #f87171; margin-top: 5px; }
 .picks-list { list-style: none; margin-top: 10px; text-align: left; }
 .picks-list li { padding: 4px 0; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
 
-
-/* Recommendation Panel */
+/* RECOMMENDATION PANEL */
 .recommendation-panel {
     background: rgba(245, 158, 11, 0.1);
     border: 1px solid var(--accent-gold);
@@ -394,9 +238,6 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s, background 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 .rec-chip:hover {
@@ -405,16 +246,87 @@ body {
     color: var(--bg-dark);
 }
 
-.chip-role {
-    font-size: 0.7rem;
-    opacity: 0.8;
+.chip-role { font-size: 0.7rem; opacity: 0.8; }
+
+/* FILTERS & SEARCH */
+.filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    background: var(--bg-card);
+    padding: 12px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
 }
 
-/* Card Visual Marker in Hero Grid */
+.filter-bar input {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-dark);
+    color: var(--text-main);
+    width: 220px;
+}
+
+.lane-tabs { display: flex; gap: 8px; }
+
+.lane-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-dark);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.lane-btn.active {
+    background: var(--blue-team);
+    color: white;
+    border-color: var(--blue-team);
+}
+
+/* HERO GRID & CARDS */
+.hero-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px;
+    margin-bottom: 20px;
+}
+
+.hero-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+}
+
+.hero-card:hover:not(.disabled) {
+    transform: translateY(-3px);
+    border-color: var(--accent-gold);
+}
+
+.hero-card.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    filter: grayscale(100%);
+}
+
 .hero-card.recommended {
     border-color: var(--accent-gold);
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
-    position: relative;
 }
 
 .rec-badge {
@@ -428,3 +340,102 @@ body {
     padding: 2px 6px;
     border-radius: 10px;
 }
+
+.hero-card .hero-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.hero-card .lane-tags {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.tag {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    background: var(--bg-dark);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+
+/* TIMELINE STRIP */
+.timeline-container {
+    background: var(--bg-card);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.timeline-container h3 {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.timeline-strip {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 4px;
+}
+
+.timeline-step {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 6px 2px;
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.timeline-step.team-A { border-color: var(--blue-team); }
+.timeline-step.team-B { border-color: var(--red-team); }
+
+.timeline-step.active {
+    background: var(--accent-gold);
+    color: var(--bg-dark);
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
+.timeline-step.completed.team-A { background: rgba(37, 99, 235, 0.4); color: white; }
+.timeline-step.completed.team-B { background: rgba(220, 38, 38, 0.4); color: white; }
+
+/* DRAFT LOG LIST */
+.draft-log-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.draft-log-box h4 {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.log-list {
+    list-style: none;
+    max-height: 120px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.log-list li {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.log-list li.team-A { color: #60a5fa; }
+.log-list li.team-B { color: #f87171; }
