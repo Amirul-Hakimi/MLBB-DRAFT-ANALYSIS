@@ -18,15 +18,17 @@
         <main id="setup-screen" class="screen active">
             <div class="hero-section">
                 <h1>Tournament Ban/Pick Simulator</h1>
-                <p>Rehearse competitive drafts or play live head-to-head multiplayer.</p>
+                <p>Rehearse drafts, test multiplayer rooms, or simulate AI vs AI draft scenarios.</p>
             </div>
 
             <div class="card setup-card">
                 <h2>Lobby Options</h2>
                 
                 <div class="btn-group">
-                    <button id="btn-mode-create" class="btn btn-primary">Create Room</button>
-                    <button id="btn-mode-join" class="btn btn-secondary">Join Room</button>
+                    <button id="btn-mode-ai" class="btn btn-primary">Vs AI Practice</button>
+                    <button id="btn-mode-sim" class="btn btn-secondary">Auto-Sim (AI vs AI)</button>
+                    <button id="btn-mode-create" class="btn btn-secondary">Create PvP</button>
+                    <button id="btn-mode-join" class="btn btn-secondary">Join PvP</button>
                 </div>
 
                 <div id="join-input-group" class="input-group hidden">
@@ -41,6 +43,15 @@
         <!-- Draft Screen View -->
         <section id="draft-screen" class="screen hidden">
             
+            <!-- Simulation Controller Bar (Only visible in Auto-Sim mode) -->
+            <div id="sim-control-bar" class="sim-toolbar hidden">
+                <span class="sim-title">🤖 Auto-Sim Controls:</span>
+                <button id="btn-sim-step" class="btn btn-secondary btn-sm">▶ Step (+1 Turn)</button>
+                <button id="btn-sim-auto" class="btn btn-primary btn-sm">⚡ Auto-Play</button>
+                <button id="btn-sim-pause" class="btn btn-secondary btn-sm">⏸ Pause</button>
+                <button id="btn-sim-reset" class="btn btn-danger btn-sm">🔄 Reset Draft</button>
+            </div>
+
             <!-- 20-Turn Progress Timeline Strip -->
             <div class="timeline-container">
                 <h3>Draft Timeline</h3>
@@ -103,9 +114,60 @@
                 <button id="btn-leave-room" class="btn btn-danger">Leave Lobby</button>
             </div>
         </section>
+
+        <!-- Post-Draft Comparison Modal -->
+        <div id="post-draft-modal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h2>Post-Draft Analysis Evaluation</h2>
+                    <span class="heuristic-tag">Draft Score — experimental heuristic</span>
+                </div>
+                <p class="disclaimer-text">
+                    ⚠️ <strong>Disclaimer:</strong> This evaluation is an experimental rule-based score analyzing lane coverage, meta priority, and team versatility. It does <strong>NOT</strong> predict in-game match outcomes or player skill.
+                </p>
+
+                <div class="scores-comparison-grid">
+                    <div class="team-score-card blue-side">
+                        <h3>Blue Team (A)</h3>
+                        <div class="score-display" id="score-team-a">0</div>
+                        <div class="score-label">Draft Quality Score</div>
+                        <ul class="breakdown-list" id="breakdown-team-a"></ul>
+                    </div>
+
+                    <div class="team-score-card red-side">
+                        <h3>Red Team (B)</h3>
+                        <div class="score-display" id="score-team-b">0</div>
+                        <div class="score-label">Draft Quality Score</div>
+                        <ul class="breakdown-list" id="breakdown-team-b"></ul>
+                    </div>
+                </div>
+
+                <div class="summary-details">
+                    <h3>Detailed Composition Breakdown</h3>
+                    <div class="comp-table-grid">
+                        <div class="comp-col">
+                            <h4>Blue Team Lineup</h4>
+                            <p><strong>Picks:</strong> <span id="comp-picks-a"></span></p>
+                            <p><strong>Bans:</strong> <span id="comp-bans-a"></span></p>
+                            <p><strong>Lanes Covered:</strong> <span id="comp-lanes-a"></span></p>
+                        </div>
+                        <div class="comp-col">
+                            <h4>Red Team Lineup</h4>
+                            <p><strong>Picks:</strong> <span id="comp-picks-b"></span></p>
+                            <p><strong>Bans:</strong> <span id="comp-bans-b"></span></p>
+                            <p><strong>Lanes Covered:</strong> <span id="comp-lanes-b"></span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="btn-close-modal" class="btn btn-primary">Back to Draft Board</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Script Execution Stack -->
+    <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/hero-data.js"></script>
     <script src="/js/draft-engine.js"></script>

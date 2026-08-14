@@ -1,7 +1,9 @@
-// Establish Socket Connection
+// =========================================================================
+// MAIN CLIENT INTERACTIVITY, REAL-TIME SYNC, SIMULATION & EVALUATION
+// =========================================================================
+
 const socket = io();
 
-// Generate or retrieve persistent Player Token for this browser tab session
 function getOrCreatePlayerToken() {
     let token = sessionStorage.getItem('mlbb_player_token');
     if (!token) {
@@ -13,11 +15,14 @@ function getOrCreatePlayerToken() {
 
 const myPlayerToken = getOrCreatePlayerToken();
 
-// DOM References
+// Core Screen References
 const connectionStatus = document.getElementById('connection-status');
 const setupScreen = document.getElementById('setup-screen');
 const draftScreen = document.getElementById('draft-screen');
 
+// Setup Controls
+const btnModeAi = document.getElementById('btn-mode-ai');
+const btnModeSim = document.getElementById('btn-mode-sim');
 const btnModeCreate = document.getElementById('btn-mode-create');
 const btnModeJoin = document.getElementById('btn-mode-join');
 const joinInputGroup = document.getElementById('join-input-group');
@@ -25,6 +30,14 @@ const roomIdInput = document.getElementById('room-id-input');
 const btnEnterRoom = document.getElementById('btn-enter-room');
 const btnLeaveRoom = document.getElementById('btn-leave-room');
 
+// Sim Toolbar Controls
+const simControlBar = document.getElementById('sim-control-bar');
+const btnSimStep = document.getElementById('btn-sim-step');
+const btnSimAuto = document.getElementById('btn-sim-auto');
+const btnSimPause = document.getElementById('btn-sim-pause');
+const btnSimReset = document.getElementById('btn-sim-reset');
+
+// Draft Board Controls
 const heroGrid = document.getElementById('hero-grid');
 const heroSearch = document.getElementById('hero-search');
 const laneButtons = document.querySelectorAll('.lane-btn');
@@ -41,27 +54,35 @@ const redPicks = document.getElementById('red-picks');
 const timelineStrip = document.getElementById('timeline-strip');
 const draftLogList = document.getElementById('draft-log-list');
 
-// Global App State
-let currentMode = 'create';
+// Evaluation Modal Controls
+const postDraftModal = document.getElementById('post-draft-modal');
+const btnCloseModal = document.getElementById('btn-close-modal');
+const scoreTeamA = document.getElementById('score-team-a');
+const scoreTeamB = document.getElementById('score-team-b');
+const breakdownTeamA = document.getElementById('breakdown-team-a');
+const breakdownTeamB = document.getElementById('breakdown-team-b');
+const compPicksA = document.getElementById('comp-picks-a');
+const compPicksB = document.getElementById('comp-picks-b');
+const compBansA = document.getElementById('comp-bans-a');
+const compBansB = document.getElementById('comp-bans-b');
+const compLanesA = document.getElementById('comp-lanes-a');
+const compLanesB = document.getElementById('comp-lanes-b');
+
+// App Global States
+let currentMode = 'vs_ai'; // 'vs_ai', 'auto_sim', 'create', 'join'
 let currentSearchQuery = '';
 let currentLaneFilter = 'ALL';
 window.myAssignedTeam = null;
 window.currentRoomId = null;
+window.currentRoomMode = null;
 
-// Socket Connection Status Events
+// =========================================================================
+// SOCKET CONNECTION & DRAFT UPDATES
+// =========================================================================
+
 socket.on('connect', () => {
     connectionStatus.innerText = 'Online';
     connectionStatus.className = 'status-badge connected';
-
-    // AUTO-RECONNECT CHECK: If page refreshed while in an active room
-    const savedRoomId = sessionStorage.getItem('mlbb_active_room');
-    if (savedRoomId && !window.currentRoomId) {
-        console.log(`Attempting auto-reconnect to room: ${savedRoomId}`);
-        socket.emit('join_room', {
-            targetRoomId: savedRoomId,
-            playerToken: myPlayerToken
-        });
-    }
 });
 
 socket.on('disconnect', () => {
@@ -69,60 +90,65 @@ socket.on('disconnect', () => {
     connectionStatus.className = 'status-badge disconnected';
 });
 
-// Authoritative State Receiver
 socket.on('draft_updated', ({ draftState: serverState }) => {
     draftState = serverState;
     updateUI();
 });
 
-socket.on('room_announcement', (data) => {
-    console.log(`[ANNOUNCEMENT] ${data.message}`);
-});
-
-socket.on('draft_error', (data) => {
-    alert(`Action Error: ${data.message}`);
-});
-
+socket.on('draft_error', (data) => alert(`Action Error: ${data.message}`));
 socket.on('room_error', (data) => {
     alert(`Room Error: ${data.message}`);
-    // Clear invalid stored session if room expired
-    sessionStorage.removeItem('mlbb_active_room');
     showSetupScreen();
 });
 
-socket.on('player_left', (data) => {
-    turnBannerText.innerText = 'Opponent Disconnected!';
-    phaseBannerText.innerText = data.message;
+// =========================================================================
+// LOBBY MODE SWITCHING & CREATION
+// =========================================================================
+
+function resetModeButtons() {
+    [btnModeAi, btnModeSim, btnModeCreate, btnModeJoin].forEach(b => {
+        if (b) b.className = 'btn btn-secondary';
+    });
+    joinInputGroup.classList.add('hidden');
+}
+
+btnModeAi.addEventListener('click', () => {
+    resetModeButtons();
+    currentMode = 'vs_ai';
+    btnModeAi.className = 'btn btn-primary';
 });
 
-// Lobby Navigation Events
+btnModeSim.addEventListener('click', () => {
+    resetModeButtons();
+    currentMode = 'auto_sim';
+    btnModeSim.className = 'btn btn-primary';
+});
+
 btnModeCreate.addEventListener('click', () => {
+    resetModeButtons();
     currentMode = 'create';
     btnModeCreate.className = 'btn btn-primary';
-    btnModeJoin.className = 'btn btn-secondary';
-    joinInputGroup.classList.add('hidden');
 });
 
 btnModeJoin.addEventListener('click', () => {
+    resetModeButtons();
     currentMode = 'join';
     btnModeJoin.className = 'btn btn-primary';
-    btnModeCreate.className = 'btn btn-secondary';
     joinInputGroup.classList.remove('hidden');
 });
 
 btnEnterRoom.addEventListener('click', () => {
-    if (currentMode === 'create') {
-        socket.emit('create_room', { playerToken: myPlayerToken });
+    if (currentMode === 'vs_ai' || currentMode === 'auto_sim') {
+        socket.emit('create_room', { playerToken: myPlayerToken, mode: currentMode });
+    } else if (currentMode === 'create') {
+        socket.emit('create_room', { playerToken: myPlayerToken, mode: 'pvp' });
     } else {
         const inputCode = roomIdInput.value.trim().toUpperCase();
         if (!inputCode) {
             alert('Please enter a valid 6-character Room ID.');
             return;
         }
-        socket.emit('join_room', {
-            targetRoomId: inputCode,
-            playerToken: myPlayerToken
-        });
+        socket.emit('join_room', { targetRoomId: inputCode, playerToken: myPlayerToken });
     }
 });
 
@@ -134,27 +160,36 @@ btnLeaveRoom.addEventListener('click', () => {
 socket.on('room_created', (data) => {
     window.currentRoomId = data.roomId;
     window.myAssignedTeam = data.yourTeam;
+    window.currentRoomMode = data.mode;
     draftState = data.draftState;
 
-    sessionStorage.setItem('mlbb_active_room', data.roomId);
-    showDraftScreen(data.roomId);
-    turnBannerText.innerText = 'Waiting for Opponent...';
-    phaseBannerText.innerText = `Share Code: ${data.roomId} (You: Team A)`;
+    showDraftScreen(data.roomId, data.mode);
 });
 
 socket.on('room_joined', (data) => {
     window.currentRoomId = data.roomId;
     window.myAssignedTeam = data.yourTeam;
+    window.currentRoomMode = data.mode;
     draftState = data.draftState;
 
-    sessionStorage.setItem('mlbb_active_room', data.roomId);
-    showDraftScreen(data.roomId);
+    showDraftScreen(data.roomId, data.mode);
 });
 
-// Timeline Strip Renderer
+// =========================================================================
+// AUTO-SIM TOOLBAR EVENT LISTENERS
+// =========================================================================
+
+btnSimStep.addEventListener('click', () => socket.emit('sim_step'));
+btnSimAuto.addEventListener('click', () => socket.emit('sim_start_auto'));
+btnSimPause.addEventListener('click', () => socket.emit('sim_pause_auto'));
+btnSimReset.addEventListener('click', () => socket.emit('sim_reset'));
+
+// =========================================================================
+// RENDERERS
+// =========================================================================
+
 function renderTimeline() {
     timelineStrip.innerHTML = '';
-
     DRAFT_SEQUENCE.forEach((step, index) => {
         const item = document.createElement('div');
         item.className = `timeline-step team-${step.team}`;
@@ -171,37 +206,36 @@ function renderTimeline() {
     });
 }
 
-// Action Log Renderer
 function renderDraftLog() {
     draftLogList.innerHTML = '';
-    
     draftState.draftLog.forEach(log => {
         const li = document.createElement('li');
         li.className = `team-${log.team}`;
         li.innerText = `[Turn ${log.turn}] Team ${log.team} ${log.action.toUpperCase()}ED ${log.hero}`;
         draftLogList.appendChild(li);
     });
-
     draftLogList.scrollTop = draftLogList.scrollHeight;
 }
 
-// Recommendation Chips Renderer
 function renderRecommendations() {
     const recContainer = document.getElementById('rec-chips-container');
     const recTitleText = document.getElementById('rec-title-text');
     const recPanel = document.getElementById('recommendation-panel');
-    
     if (!recContainer || !recPanel) return;
-    recContainer.innerHTML = '';
+
+    if (window.currentRoomMode === 'auto_sim') {
+        recPanel.style.display = 'none';
+        return;
+    }
 
     const recData = getRecommendations();
-
     if (recData.type === 'complete') {
         recPanel.style.display = 'none';
         return;
     }
 
     recPanel.style.display = 'block';
+    recContainer.innerHTML = '';
 
     if (recData.type === 'ban') {
         recTitleText.innerText = 'High Priority Deny / Ban Suggestions:';
@@ -214,19 +248,13 @@ function renderRecommendations() {
         const chip = document.createElement('button');
         chip.className = 'rec-chip';
         chip.innerHTML = `<span>${hero.name}</span> <span class="chip-role">(${hero.lanes.join('/')})</span>`;
-        
-        chip.addEventListener('click', () => {
-            socket.emit('select_hero', { heroId: hero.id });
-        });
-
+        chip.addEventListener('click', () => socket.emit('select_hero', { heroId: hero.id }));
         recContainer.appendChild(chip);
     });
 }
 
-// Hero Grid Renderer
 function renderHeroGrid() {
     heroGrid.innerHTML = '';
-
     const recData = getRecommendations();
     const recommendedIds = recData.list.map(h => h.id);
 
@@ -241,9 +269,10 @@ function renderHeroGrid() {
         card.className = 'hero-card';
 
         const unavailable = isHeroUnavailable(hero.id);
-        const isRecommended = recommendedIds.includes(hero.id) && !unavailable && !draftState.isComplete;
+        const isSimMode = window.currentRoomMode === 'auto_sim';
+        const isRecommended = recommendedIds.includes(hero.id) && !unavailable && !draftState.isComplete && !isSimMode;
 
-        if (unavailable || draftState.isComplete) {
+        if (unavailable || draftState.isComplete || isSimMode) {
             card.classList.add('disabled');
         } else if (isRecommended) {
             card.classList.add('recommended');
@@ -258,15 +287,37 @@ function renderHeroGrid() {
             <div class="lane-tags">${tagsHtml}</div>
         `;
 
-        card.addEventListener('click', () => {
-            socket.emit('select_hero', { heroId: hero.id });
-        });
+        if (!isSimMode) {
+            card.addEventListener('click', () => socket.emit('select_hero', { heroId: hero.id }));
+        }
 
         heroGrid.appendChild(card);
     });
 }
 
-// Turn Status & Team Panels Renderer
+function showPostDraftAnalysis() {
+    const resultA = evaluateTeamDraft(draftState.picks.A);
+    const resultB = evaluateTeamDraft(draftState.picks.B);
+
+    scoreTeamA.innerText = resultA.score;
+    scoreTeamB.innerText = resultB.score;
+
+    breakdownTeamA.innerHTML = resultA.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
+    breakdownTeamB.innerHTML = resultB.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
+
+    compPicksA.innerText = draftState.picks.A.map(h => h.name).join(', ') || 'None';
+    compPicksB.innerText = draftState.picks.B.map(h => h.name).join(', ') || 'None';
+    compBansA.innerText = draftState.bans.A.map(h => h.name).join(', ') || 'None';
+    compBansB.innerText = draftState.bans.B.map(h => h.name).join(', ') || 'None';
+
+    compLanesA.innerText = resultA.coveredLanes.join(', ') || 'None';
+    compLanesB.innerText = resultB.coveredLanes.join(', ') || 'None';
+
+    postDraftModal.classList.remove('hidden');
+}
+
+btnCloseModal.addEventListener('click', () => postDraftModal.classList.add('hidden'));
+
 function updateTurnStatusUI() {
     blueBans.innerText = 'Bans: ' + (draftState.bans.A.map(h => h.name).join(', ') || 'None');
     redBans.innerText = 'Bans: ' + (draftState.bans.B.map(h => h.name).join(', ') || 'None');
@@ -274,18 +325,23 @@ function updateTurnStatusUI() {
     bluePicks.innerHTML = draftState.picks.A.map(h => `<li>${h.name}</li>`).join('');
     redPicks.innerHTML = draftState.picks.B.map(h => `<li>${h.name}</li>`).join('');
 
-    if (draftState.isComplete) {
+    if (draftState.isComplete && draftState.currentTurnIndex >= 20) {
         turnBannerText.innerText = 'DRAFT COMPLETE!';
         phaseBannerText.innerText = 'All 20 actions performed.';
         teamABox.classList.remove('active-turn');
         teamBBox.classList.remove('active-turn');
+        showPostDraftAnalysis();
         return;
+    } else {
+        postDraftModal.classList.add('hidden');
     }
 
     const turn = getCurrentTurn();
+    if (!turn) return;
+
     const actionUpper = turn.action.toUpperCase();
-    
-    turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper} (You: Team ${window.myAssignedTeam})`;
+    const spectatorSubtext = window.currentRoomMode === 'auto_sim' ? '(Spectating AI)' : `(You: Team ${window.myAssignedTeam})`;
+    turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper} ${spectatorSubtext}`;
     phaseBannerText.innerText = turn.phase;
 
     if (turn.team === 'A') {
@@ -297,7 +353,6 @@ function updateTurnStatusUI() {
     }
 }
 
-// Master UI Redraw Trigger
 function updateUI() {
     renderTimeline();
     renderRecommendations();
@@ -306,7 +361,6 @@ function updateUI() {
     updateTurnStatusUI();
 }
 
-// Search & Filter Listeners
 heroSearch.addEventListener('input', (e) => {
     currentSearchQuery = e.target.value;
     renderHeroGrid();
@@ -321,18 +375,21 @@ laneButtons.forEach(btn => {
     });
 });
 
-function showDraftScreen(roomId) {
+function showDraftScreen(roomId, mode) {
     roomDisplayTag.innerText = `ROOM: ${roomId}`;
     setupScreen.classList.add('hidden');
-    setupScreen.classList.remove('active');
     draftScreen.classList.remove('hidden');
-    draftScreen.classList.add('active');
+
+    if (mode === 'auto_sim') {
+        simControlBar.classList.remove('hidden');
+    } else {
+        simControlBar.classList.add('hidden');
+    }
+
     updateUI();
 }
 
 function showSetupScreen() {
     draftScreen.classList.add('hidden');
-    draftScreen.classList.remove('active');
     setupScreen.classList.remove('hidden');
-    setupScreen.classList.add('active');
 }

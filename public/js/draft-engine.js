@@ -178,3 +178,62 @@ function getRecommendations() {
 
 // Expose helper globally
 window.getRecommendations = getRecommendations;
+
+// --- DRAFT EVALUATION HEURISTIC CALCULATOR ---
+function evaluateTeamDraft(teamPicks) {
+    if (!teamPicks || teamPicks.length === 0) {
+        return { score: 0, breakdown: [], coveredLanes: [] };
+    }
+
+    const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
+    const breakdown = [];
+
+    // 1. Meta Strength Score (Max 50)
+    const totalPickWeight = teamPicks.reduce((sum, hero) => sum + (hero.pickWeight || 5), 0);
+    const avgPickWeight = totalPickWeight / teamPicks.length;
+    const metaScore = Math.round(avgPickWeight * 5);
+    breakdown.push({ text: `Meta Power Base: +${metaScore} pts (Avg Weight: ${avgPickWeight.toFixed(1)}/10)`, type: 'pos' });
+
+    // 2. Lane Coverage Score
+    const coveredLanesSet = new Set();
+    teamPicks.forEach(hero => {
+        (hero.lanes || []).forEach(l => coveredLanesSet.add(l));
+    });
+    const coveredLanes = Array.from(coveredLanesSet);
+    const coverageScore = coveredLanes.length * 5;
+    breakdown.push({ text: `Lane Coverage (${coveredLanes.length}/5): +${coverageScore} pts`, type: 'pos' });
+
+    // 3. Full Lineup Bonus
+    let fullLineupBonus = 0;
+    if (coveredLanes.length === 5) {
+        fullLineupBonus = 10;
+        breakdown.push({ text: `Full 5-Role Balance Bonus: +10 pts`, type: 'pos' });
+    } else {
+        const missing = ALL_LANES.filter(l => !coveredLanes.includes(l));
+        breakdown.push({ text: `Missing Roles (${missing.join(', ')}): -${missing.length * 8} pts`, type: 'neg' });
+    }
+
+    // 4. Flex / Versatility Bonus
+    const flexCount = teamPicks.filter(hero => (hero.lanes || []).length > 1).length;
+    const flexBonus = Math.min(15, flexCount * 3);
+    if (flexBonus > 0) {
+        breakdown.push({ text: `Multi-Lane Flexibility (${flexCount} heroes): +${flexBonus} pts`, type: 'pos' });
+    }
+
+    // 5. Deductions
+    const missingCount = ALL_LANES.length - coveredLanes.length;
+    const missingPenalty = missingCount * 8;
+
+    // Final Clamped Score Calculation
+    let rawScore = metaScore + coverageScore + fullLineupBonus + flexBonus - missingPenalty;
+    const finalScore = Math.min(100, Math.max(0, rawScore));
+
+    return {
+        score: finalScore,
+        coveredLanes: coveredLanes,
+        breakdown: breakdown
+    };
+}
+
+// Expose globally
+window.evaluateTeamDraft = evaluateTeamDraft;

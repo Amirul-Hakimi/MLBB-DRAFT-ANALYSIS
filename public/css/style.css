@@ -439,3 +439,171 @@ body {
 
 .log-list li.team-A { color: #60a5fa; }
 .log-list li.team-B { color: #f87171; }
+
+/* Post-Draft Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-card {
+    background: var(--bg-card);
+    border: 1px solid var(--accent-gold);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 850px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 25px;
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.25);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.heuristic-tag {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--accent-gold);
+    border: 1px solid var(--accent-gold);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.disclaimer-text {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    background: var(--bg-dark);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border-left: 3px solid var(--accent-gold);
+}
+
+.scores-comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.team-score-card {
+    background: var(--bg-dark);
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid var(--border-color);
+    text-align: center;
+}
+
+.team-score-card.blue-side { border-color: var(--blue-team); }
+.team-score-card.red-side { border-color: var(--red-team); }
+
+.score-display {
+    font-size: 3.5rem;
+    font-weight: 900;
+    color: var(--accent-gold);
+    line-height: 1;
+    margin: 10px 0 5px;
+}
+
+.score-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 15px;
+}
+
+.breakdown-list {
+    list-style: none;
+    text-align: left;
+    font-size: 0.82rem;
+}
+
+.breakdown-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.breakdown-list li.pos { color: #4ade80; }
+.breakdown-list li.neg { color: #f87171; }
+
+.summary-details {
+    background: var(--bg-dark);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.summary-details h3 {
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+    color: var(--accent-gold);
+}
+
+.comp-table-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    font-size: 0.85rem;
+}
+
+.comp-col p {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+}
+
+.comp-col span {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.modal-actions {
+    text-align: right;
+}
+
+.modal-overlay.hidden {
+    display: none !important;
+}
+
+/* Sim Toolbar */
+.sim-toolbar {
+    background: var(--bg-card);
+    border: 1px solid var(--accent-gold);
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.sim-toolbar.hidden {
+    display: none !important;
+}
+
+.sim-title {
+    font-weight: 700;
+    color: var(--accent-gold);
+    font-size: 0.9rem;
+    margin-right: 5px;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+}
