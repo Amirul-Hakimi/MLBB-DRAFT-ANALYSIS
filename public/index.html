@@ -2,116 +2,194 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MLBB Draft Tool | Tournament Simulator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MLBB Draft Tool | Esports Ban/Pick Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <div class="app-container">
-        <!-- Top Navigation -->
+        <!-- Top Navbar -->
         <header class="navbar">
-            <div class="logo">MLBB <span>DRAFT TOOL</span></div>
-            <div id="connection-status" class="status-badge disconnected">Offline</div>
+            <div class="brand">
+                <div class="brand-icon">⚔️</div>
+                <div class="brand-text">
+                    <span class="title">MLBB <strong>DRAFT ARENA</strong></span>
+                    <span class="subtitle">Competitive Ban/Pick Simulator</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div id="connection-status" class="status-badge disconnected">
+                    <span class="status-dot"></span>
+                    <span class="status-label">Offline</span>
+                </div>
+            </div>
         </header>
 
-        <!-- Room Setup View -->
+        <!-- Lobby Setup Screen -->
         <main id="setup-screen" class="screen active">
-            <div class="hero-section">
-                <h1>Tournament Ban/Pick Simulator</h1>
-                <p>Rehearse drafts, test multiplayer rooms, or simulate AI vs AI draft scenarios.</p>
+            <div class="hero-header">
+                <h1 class="glow-text">TOURNAMENT DRAFT SIMULATOR</h1>
+                <p>Rehearse competitive strategies, simulate AI lineups, or compete live head-to-head.</p>
             </div>
 
             <div class="card setup-card">
-                <h2>Lobby Options</h2>
+                <div class="card-header">
+                    <h2>Select Match Mode</h2>
+                    <p class="card-desc">Choose how you want to conduct the ban/pick phase</p>
+                </div>
                 
-                <div class="btn-group">
-                    <button id="btn-mode-ai" class="btn btn-primary">Vs AI Practice</button>
-                    <button id="btn-mode-sim" class="btn btn-secondary">Auto-Sim (AI vs AI)</button>
-                    <button id="btn-mode-create" class="btn btn-secondary">Create PvP</button>
-                    <button id="btn-mode-join" class="btn btn-secondary">Join PvP</button>
+                <div class="mode-grid">
+                    <button id="btn-mode-ai" class="mode-card active">
+                        <div class="mode-icon">🤖</div>
+                        <div class="mode-info">
+                            <span class="mode-title">Vs AI Practice</span>
+                            <span class="mode-desc">Solo practice against smart AI</span>
+                        </div>
+                    </button>
+
+                    <button id="btn-mode-sim" class="mode-card">
+                        <div class="mode-icon">⚡</div>
+                        <div class="mode-info">
+                            <span class="mode-title">Auto-Sim (AI vs AI)</span>
+                            <span class="mode-desc">Observe simulated drafts</span>
+                        </div>
+                    </button>
+
+                    <button id="btn-mode-create" class="mode-card">
+                        <div class="mode-icon">🛡️</div>
+                        <div class="mode-info">
+                            <span class="mode-title">Create PvP Lobby</span>
+                            <span class="mode-desc">Host room for 2 players</span>
+                        </div>
+                    </button>
+
+                    <button id="btn-mode-join" class="mode-card">
+                        <div class="mode-icon">⚔️</div>
+                        <div class="mode-info">
+                            <span class="mode-title">Join PvP Lobby</span>
+                            <span class="mode-desc">Enter room code to join</span>
+                        </div>
+                    </button>
                 </div>
 
                 <div id="join-input-group" class="input-group hidden">
-                    <label for="room-id-input">Enter 6-Character Room ID:</label>
-                    <input type="text" id="room-id-input" placeholder="e.g. ROOM99" maxlength="6">
+                    <label for="room-id-input">Room Code</label>
+                    <input type="text" id="room-id-input" placeholder="e.g. A3K9M2" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters">
                 </div>
 
-                <button id="btn-enter-room" class="btn btn-success btn-large">Enter Draft Room</button>
+                <button id="btn-enter-room" class="btn btn-gold btn-large">
+                    <span>Enter Draft Arena</span>
+                    <span class="btn-arrow">→</span>
+                </button>
             </div>
         </main>
 
-        <!-- Draft Screen View -->
+        <!-- Draft Arena Screen -->
         <section id="draft-screen" class="screen hidden">
             
-            <!-- Simulation Controller Bar (Only visible in Auto-Sim mode) -->
+            <!-- Auto-Sim Control Toolbar -->
             <div id="sim-control-bar" class="sim-toolbar hidden">
-                <span class="sim-title">🤖 Auto-Sim Controls:</span>
-                <button id="btn-sim-step" class="btn btn-secondary btn-sm">▶ Step (+1 Turn)</button>
-                <button id="btn-sim-auto" class="btn btn-primary btn-sm">⚡ Auto-Play</button>
-                <button id="btn-sim-pause" class="btn btn-secondary btn-sm">⏸ Pause</button>
-                <button id="btn-sim-reset" class="btn btn-danger btn-sm">🔄 Reset Draft</button>
+                <div class="sim-label">
+                    <span class="sim-indicator"></span>
+                    <span>AUTO-SIMULATION ENGINE</span>
+                </div>
+                <div class="sim-actions">
+                    <button id="btn-sim-step" class="btn btn-secondary btn-sm">▶ Step (+1 Turn)</button>
+                    <button id="btn-sim-auto" class="btn btn-gold btn-sm">⚡ Auto-Play</button>
+                    <button id="btn-sim-pause" class="btn btn-secondary btn-sm">⏸ Pause</button>
+                    <button id="btn-sim-reset" class="btn btn-danger btn-sm">🔄 Reset</button>
+                </div>
             </div>
 
-            <!-- 20-Turn Progress Timeline Strip -->
+            <!-- Draft Status & Versus Header -->
+            <div class="draft-arena-header">
+                <!-- Team Blue (A) -->
+                <div class="team-side blue-side" id="team-a-box">
+                    <div class="side-badge">FIRST PICK</div>
+                    <h2 class="team-name">BLUE TEAM (A)</h2>
+                    <div class="team-bans-bar">
+                        <span class="ban-title">BANS:</span>
+                        <div id="blue-bans" class="bans-chips">None</div>
+                    </div>
+                    <ul id="blue-picks" class="picks-slots-list"></ul>
+                </div>
+
+                <!-- Center Turn Announcer -->
+                <div class="turn-announcer-center">
+                    <div class="room-code-tag">
+                        <span id="room-display-tag">ROOM: ----</span>
+                    </div>
+                    <div id="turn-banner-text" class="turn-headline">READY TO DRAFT</div>
+                    <div id="phase-banner-text" class="phase-badge">BAN PHASE 1</div>
+                </div>
+
+                <!-- Team Red (B) -->
+                <div class="team-side red-side" id="team-b-box">
+                    <div class="side-badge">SECOND PICK</div>
+                    <h2 class="team-name">RED TEAM (B)</h2>
+                    <div class="team-bans-bar">
+                        <span class="ban-title">BANS:</span>
+                        <div id="red-bans" class="bans-chips">None</div>
+                    </div>
+                    <ul id="red-picks" class="picks-slots-list"></ul>
+                </div>
+            </div>
+
+            <!-- 20-Turn Draft Sequence Timeline -->
             <div class="timeline-container">
-                <h3>Draft Timeline</h3>
+                <div class="timeline-header">
+                    <span>DRAFT PROGRESS TIMELINE</span>
+                    <span class="timeline-legend">
+                        <span class="dot blue"></span> Team A 
+                        <span class="dot red"></span> Team B
+                    </span>
+                </div>
                 <div id="timeline-strip" class="timeline-strip"></div>
             </div>
 
-            <!-- Header & Team Panels -->
-            <div class="draft-header">
-                <div class="team-banner blue-team" id="team-a-box">
-                    <h2>Blue Team (A)</h2>
-                    <div id="blue-bans" class="bans-list">Bans: None</div>
-                    <ul id="blue-picks" class="picks-list"></ul>
-                </div>
-
-                <div class="draft-status-center">
-                    <div id="room-display-tag" class="room-tag">ROOM: ----</div>
-                    <div id="turn-banner-text" class="turn-banner">Waiting for players...</div>
-                    <div id="phase-banner-text" class="phase-subtext">Ban Phase 1</div>
-                </div>
-
-                <div class="team-banner red-team" id="team-b-box">
-                    <h2>Red Team (B)</h2>
-                    <div id="red-bans" class="bans-list">Bans: None</div>
-                    <ul id="red-picks" class="picks-list"></ul>
-                </div>
-            </div>
-
-            <!-- Recommendation Panel -->
+            <!-- Strategic Recommendation Panel -->
             <div class="recommendation-panel" id="recommendation-panel">
                 <div class="rec-header">
-                    <span class="rec-icon">⭐</span>
-                    <span id="rec-title-text" class="rec-title">Recommended Actions</span>
+                    <span class="rec-icon">⚡</span>
+                    <span id="rec-title-text" class="rec-title">Tactical Suggestions</span>
                 </div>
                 <div id="rec-chips-container" class="rec-chips-container"></div>
             </div>
 
-            <!-- Hero Filters -->
-            <div class="filter-bar">
-                <input type="text" id="hero-search" placeholder="Search hero by name..." />
-                <div class="lane-tabs">
-                    <button class="lane-btn active" data-lane="ALL">ALL</button>
-                    <button class="lane-btn" data-lane="EXP">EXP</button>
-                    <button class="lane-btn" data-lane="Jungle">Jungle</button>
-                    <button class="lane-btn" data-lane="Mid">Mid</button>
-                    <button class="lane-btn" data-lane="Gold">Gold</button>
-                    <button class="lane-btn" data-lane="Roam">Roam</button>
+            <!-- Hero Selector Section -->
+            <div class="hero-selector-section">
+                <div class="filter-controls">
+                    <div class="search-wrap">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="hero-search" placeholder="Filter heroes..." autocomplete="off">
+                    </div>
+                    <div class="lane-filter-tabs">
+                        <button class="lane-btn active" data-lane="ALL">ALL</button>
+                        <button class="lane-btn" data-lane="EXP">EXP</button>
+                        <button class="lane-btn" data-lane="Jungle">JUNGLE</button>
+                        <button class="lane-btn" data-lane="Mid">MID</button>
+                        <button class="lane-btn" data-lane="Gold">GOLD</button>
+                        <button class="lane-btn" data-lane="Roam">ROAM</button>
+                    </div>
                 </div>
+
+                <!-- Hero Cards Grid -->
+                <div id="hero-grid" class="hero-grid"></div>
             </div>
 
-            <!-- Main Hero Selection Grid -->
-            <div id="hero-grid" class="hero-grid"></div>
+            <!-- Action Log & Leave Footer -->
+            <div class="bottom-tools-grid">
+                <div class="draft-log-box">
+                    <div class="log-header">📜 Chronological Action Ticker</div>
+                    <ul id="draft-log-list" class="log-list"></ul>
+                </div>
 
-            <!-- Chronological Draft Log -->
-            <div class="draft-log-box">
-                <h4>Chronological Action Log</h4>
-                <ul id="draft-log-list" class="log-list"></ul>
-            </div>
-
-            <div class="action-footer">
-                <button id="btn-leave-room" class="btn btn-danger">Leave Lobby</button>
+                <div class="footer-actions">
+                    <button id="btn-leave-room" class="btn btn-outline-danger">Exit Room</button>
+                </div>
             </div>
         </section>
 
@@ -119,55 +197,60 @@
         <div id="post-draft-modal" class="modal-overlay hidden">
             <div class="modal-card">
                 <div class="modal-header">
-                    <h2>Post-Draft Analysis Evaluation</h2>
-                    <span class="heuristic-tag">Draft Score — experimental heuristic</span>
+                    <div class="modal-title-wrap">
+                        <h2>Post-Draft Evaluation</h2>
+                        <span class="heuristic-tag">Draft Score — experimental heuristic</span>
+                    </div>
                 </div>
+
                 <p class="disclaimer-text">
-                    ⚠️ <strong>Disclaimer:</strong> This evaluation is an experimental rule-based score analyzing lane coverage, meta priority, and team versatility. It does <strong>NOT</strong> predict in-game match outcomes or player skill.
+                    ⚠️ <strong>Evaluation Note:</strong> This score is a heuristic analysis of lane balance, counter-pick potential, and meta tiers. It does <strong>not</strong> guarantee match victory.
                 </p>
 
+                <!-- Comparison Score Cards -->
                 <div class="scores-comparison-grid">
-                    <div class="team-score-card blue-side">
-                        <h3>Blue Team (A)</h3>
+                    <div class="team-score-card blue-card">
+                        <div class="score-team-tag">BLUE TEAM (A)</div>
                         <div class="score-display" id="score-team-a">0</div>
-                        <div class="score-label">Draft Quality Score</div>
+                        <div class="score-subtitle">Draft Quality Rating</div>
                         <ul class="breakdown-list" id="breakdown-team-a"></ul>
                     </div>
 
-                    <div class="team-score-card red-side">
-                        <h3>Red Team (B)</h3>
+                    <div class="team-score-card red-card">
+                        <div class="score-team-tag">RED TEAM (B)</div>
                         <div class="score-display" id="score-team-b">0</div>
-                        <div class="score-label">Draft Quality Score</div>
+                        <div class="score-subtitle">Draft Quality Rating</div>
                         <ul class="breakdown-list" id="breakdown-team-b"></ul>
                     </div>
                 </div>
 
+                <!-- Lineup Details -->
                 <div class="summary-details">
-                    <h3>Detailed Composition Breakdown</h3>
+                    <h3>Composition Analysis</h3>
                     <div class="comp-table-grid">
-                        <div class="comp-col">
-                            <h4>Blue Team Lineup</h4>
-                            <p><strong>Picks:</strong> <span id="comp-picks-a"></span></p>
-                            <p><strong>Bans:</strong> <span id="comp-bans-a"></span></p>
-                            <p><strong>Lanes Covered:</strong> <span id="comp-lanes-a"></span></p>
+                        <div class="comp-col blue-comp">
+                            <h4>Blue Team</h4>
+                            <p><strong>Picks:</strong> <span id="comp-picks-a">-</span></p>
+                            <p><strong>Bans:</strong> <span id="comp-bans-a">-</span></p>
+                            <p><strong>Covered Lanes:</strong> <span id="comp-lanes-a">-</span></p>
                         </div>
-                        <div class="comp-col">
-                            <h4>Red Team Lineup</h4>
-                            <p><strong>Picks:</strong> <span id="comp-picks-b"></span></p>
-                            <p><strong>Bans:</strong> <span id="comp-bans-b"></span></p>
-                            <p><strong>Lanes Covered:</strong> <span id="comp-lanes-b"></span></p>
+                        <div class="comp-col red-comp">
+                            <h4>Red Team</h4>
+                            <p><strong>Picks:</strong> <span id="comp-picks-b">-</span></p>
+                            <p><strong>Bans:</strong> <span id="comp-bans-b">-</span></p>
+                            <p><strong>Covered Lanes:</strong> <span id="comp-lanes-b">-</span></p>
                         </div>
                     </div>
                 </div>
 
                 <div class="modal-actions">
-                    <button id="btn-close-modal" class="btn btn-primary">Back to Draft Board</button>
+                    <button id="btn-close-modal" class="btn btn-gold">Review Draft Board</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Script Dependencies -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/hero-data.js"></script>
     <script src="/js/draft-engine.js"></script>

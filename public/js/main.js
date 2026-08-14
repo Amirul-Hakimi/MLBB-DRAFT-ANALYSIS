@@ -81,13 +81,13 @@ window.currentRoomMode = null;
 // =========================================================================
 
 socket.on('connect', () => {
-    connectionStatus.innerText = 'Online';
     connectionStatus.className = 'status-badge connected';
+    connectionStatus.querySelector('.status-label').innerText = 'Online';
 });
 
 socket.on('disconnect', () => {
-    connectionStatus.innerText = 'Offline';
     connectionStatus.className = 'status-badge disconnected';
+    connectionStatus.querySelector('.status-label').innerText = 'Offline';
 });
 
 socket.on('draft_updated', ({ draftState: serverState }) => {
@@ -102,39 +102,39 @@ socket.on('room_error', (data) => {
 });
 
 // =========================================================================
-// LOBBY MODE SWITCHING & CREATION
+// LOBBY MODE SWITCHING
 // =========================================================================
 
-function resetModeButtons() {
-    [btnModeAi, btnModeSim, btnModeCreate, btnModeJoin].forEach(b => {
-        if (b) b.className = 'btn btn-secondary';
+function setActiveModeCard(selectedBtn) {
+    [btnModeAi, btnModeSim, btnModeCreate, btnModeJoin].forEach(btn => {
+        if (btn) btn.classList.remove('active');
     });
-    joinInputGroup.classList.add('hidden');
+    if (selectedBtn) selectedBtn.classList.add('active');
 }
 
 btnModeAi.addEventListener('click', () => {
-    resetModeButtons();
     currentMode = 'vs_ai';
-    btnModeAi.className = 'btn btn-primary';
+    setActiveModeCard(btnModeAi);
+    joinInputGroup.classList.add('hidden');
 });
 
 btnModeSim.addEventListener('click', () => {
-    resetModeButtons();
     currentMode = 'auto_sim';
-    btnModeSim.className = 'btn btn-primary';
+    setActiveModeCard(btnModeSim);
+    joinInputGroup.classList.add('hidden');
 });
 
 btnModeCreate.addEventListener('click', () => {
-    resetModeButtons();
     currentMode = 'create';
-    btnModeCreate.className = 'btn btn-primary';
+    setActiveModeCard(btnModeCreate);
+    joinInputGroup.classList.add('hidden');
 });
 
 btnModeJoin.addEventListener('click', () => {
-    resetModeButtons();
     currentMode = 'join';
-    btnModeJoin.className = 'btn btn-primary';
+    setActiveModeCard(btnModeJoin);
     joinInputGroup.classList.remove('hidden');
+    roomIdInput.focus();
 });
 
 btnEnterRoom.addEventListener('click', () => {
@@ -145,7 +145,7 @@ btnEnterRoom.addEventListener('click', () => {
     } else {
         const inputCode = roomIdInput.value.trim().toUpperCase();
         if (!inputCode) {
-            alert('Please enter a valid 6-character Room ID.');
+            alert('Please enter a 6-character room code.');
             return;
         }
         socket.emit('join_room', { targetRoomId: inputCode, playerToken: myPlayerToken });
@@ -162,7 +162,6 @@ socket.on('room_created', (data) => {
     window.myAssignedTeam = data.yourTeam;
     window.currentRoomMode = data.mode;
     draftState = data.draftState;
-
     showDraftScreen(data.roomId, data.mode);
 });
 
@@ -171,14 +170,10 @@ socket.on('room_joined', (data) => {
     window.myAssignedTeam = data.yourTeam;
     window.currentRoomMode = data.mode;
     draftState = data.draftState;
-
     showDraftScreen(data.roomId, data.mode);
 });
 
-// =========================================================================
-// AUTO-SIM TOOLBAR EVENT LISTENERS
-// =========================================================================
-
+// Auto-Sim Controls
 btnSimStep.addEventListener('click', () => socket.emit('sim_step'));
 btnSimAuto.addEventListener('click', () => socket.emit('sim_start_auto'));
 btnSimPause.addEventListener('click', () => socket.emit('sim_pause_auto'));
@@ -238,16 +233,16 @@ function renderRecommendations() {
     recContainer.innerHTML = '';
 
     if (recData.type === 'ban') {
-        recTitleText.innerText = 'High Priority Deny / Ban Suggestions:';
+        recTitleText.innerText = 'Target Deny / High Priority Bans:';
     } else {
-        const laneStr = recData.neededLanes.length > 0 ? recData.neededLanes.join(', ') : 'Flex';
-        recTitleText.innerText = `Suggested Picks (Needs: ${laneStr}):`;
+        const laneStr = recData.neededLanes.length > 0 ? recData.neededLanes.join(', ') : 'Flex Fill';
+        recTitleText.innerText = `Optimal Picks (Needs: ${laneStr}):`;
     }
 
     recData.list.forEach(hero => {
         const chip = document.createElement('button');
         chip.className = 'rec-chip';
-        chip.innerHTML = `<span>${hero.name}</span> <span class="chip-role">(${hero.lanes.join('/')})</span>`;
+        chip.innerHTML = `<span>${hero.name}</span> <small>(${hero.lanes.join('/')})</small>`;
         chip.addEventListener('click', () => socket.emit('select_hero', { heroId: hero.id }));
         recContainer.appendChild(chip);
     });
@@ -295,6 +290,58 @@ function renderHeroGrid() {
     });
 }
 
+function renderSlots(team, picksListElement) {
+    picksListElement.innerHTML = '';
+    const picks = draftState.picks[team];
+
+    for (let i = 0; i < 5; i++) {
+        const hero = picks[i];
+        const li = document.createElement('li');
+        li.className = 'pick-slot';
+        if (hero) {
+            li.innerHTML = `<span>${hero.name}</span> <span class="slot-lanes">${hero.lanes.join('/')}</span>`;
+        } else {
+            li.innerHTML = `<span style="color: var(--text-muted); font-style: italic;">Pick ${i + 1} Pending...</span>`;
+        }
+        picksListElement.appendChild(li);
+    }
+}
+
+function updateTurnStatusUI() {
+    blueBans.innerText = draftState.bans.A.map(h => h.name).join(', ') || 'None';
+    redBans.innerText = draftState.bans.B.map(h => h.name).join(', ') || 'None';
+
+    renderSlots('A', bluePicks);
+    renderSlots('B', redPicks);
+
+    if (draftState.isComplete && draftState.currentTurnIndex >= 20) {
+        turnBannerText.innerText = 'DRAFT COMPLETE';
+        phaseBannerText.innerText = 'Evaluation Ready';
+        teamABox.classList.remove('active-turn');
+        teamBBox.classList.remove('active-turn');
+        showPostDraftAnalysis();
+        return;
+    } else {
+        postDraftModal.classList.add('hidden');
+    }
+
+    const turn = getCurrentTurn();
+    if (!turn) return;
+
+    const actionUpper = turn.action.toUpperCase();
+    const spectatorSubtext = window.currentRoomMode === 'auto_sim' ? '(Spectating AI)' : `(You: Team ${window.myAssignedTeam})`;
+    turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper}`;
+    phaseBannerText.innerText = `${turn.phase} ${spectatorSubtext}`;
+
+    if (turn.team === 'A') {
+        teamABox.classList.add('active-turn');
+        teamBBox.classList.remove('active-turn');
+    } else {
+        teamBBox.classList.add('active-turn');
+        teamABox.classList.remove('active-turn');
+    }
+}
+
 function showPostDraftAnalysis() {
     const resultA = evaluateTeamDraft(draftState.picks.A);
     const resultB = evaluateTeamDraft(draftState.picks.B);
@@ -317,41 +364,6 @@ function showPostDraftAnalysis() {
 }
 
 btnCloseModal.addEventListener('click', () => postDraftModal.classList.add('hidden'));
-
-function updateTurnStatusUI() {
-    blueBans.innerText = 'Bans: ' + (draftState.bans.A.map(h => h.name).join(', ') || 'None');
-    redBans.innerText = 'Bans: ' + (draftState.bans.B.map(h => h.name).join(', ') || 'None');
-
-    bluePicks.innerHTML = draftState.picks.A.map(h => `<li>${h.name}</li>`).join('');
-    redPicks.innerHTML = draftState.picks.B.map(h => `<li>${h.name}</li>`).join('');
-
-    if (draftState.isComplete && draftState.currentTurnIndex >= 20) {
-        turnBannerText.innerText = 'DRAFT COMPLETE!';
-        phaseBannerText.innerText = 'All 20 actions performed.';
-        teamABox.classList.remove('active-turn');
-        teamBBox.classList.remove('active-turn');
-        showPostDraftAnalysis();
-        return;
-    } else {
-        postDraftModal.classList.add('hidden');
-    }
-
-    const turn = getCurrentTurn();
-    if (!turn) return;
-
-    const actionUpper = turn.action.toUpperCase();
-    const spectatorSubtext = window.currentRoomMode === 'auto_sim' ? '(Spectating AI)' : `(You: Team ${window.myAssignedTeam})`;
-    turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper} ${spectatorSubtext}`;
-    phaseBannerText.innerText = turn.phase;
-
-    if (turn.team === 'A') {
-        teamABox.classList.add('active-turn');
-        teamBBox.classList.remove('active-turn');
-    } else {
-        teamBBox.classList.add('active-turn');
-        teamABox.classList.remove('active-turn');
-    }
-}
 
 function updateUI() {
     renderTimeline();
