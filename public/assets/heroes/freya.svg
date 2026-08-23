@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="grad_freya" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#854d0e" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="16" fill="url(#grad_freya)" />
+  <rect x="3" y="3" width="94" height="94" rx="13" fill="none" stroke="#fef08a" stroke-width="2" stroke-opacity="0.3" />
+  <text x="50" y="52" font-family="'Rajdhani', sans-serif" font-weight="700" font-size="34" fill="#fef08a" text-anchor="middle" dominant-baseline="middle" letter-spacing="1">FR</text>
+  <rect x="10" y="74" width="80" height="18" rx="4" fill="#080c14" fill-opacity="0.75" />
+  <text x="50" y="86" font-family="'Inter', sans-serif" font-weight="600" font-size="11" fill="#f8fafc" text-anchor="middle" dominant-baseline="middle" letter-spacing="0.5">EXP</text>
+</svg>

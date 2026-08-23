@@ -3,44 +3,17 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 
+const { HERO_DATASET, getHeroLanes, getHeroPickRate, getHeroBanRate } = require('./public/js/hero-data.js');
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const AI_DECISION_DELAY_MS = 1200;
-const SIM_AUTO_INTERVAL_MS = 1200;
-
-// Master Hero Dataset (Authoritative Server Truth)
-const HERO_DATASET = [
-    { id: "fanny", name: "Fanny", lanes: ["Jungle"], banWeight: 9, pickWeight: 8 },
-    { id: "ling", name: "Ling", lanes: ["Jungle"], banWeight: 8, pickWeight: 8 },
-    { id: "joy", name: "Joy", lanes: ["EXP", "Jungle"], banWeight: 7, pickWeight: 7 },
-    { id: "hayabusa", name: "Hayabusa", lanes: ["Jungle"], banWeight: 8, pickWeight: 8 },
-    { id: "nolan", name: "Nolan", lanes: ["Jungle"], banWeight: 8, pickWeight: 8 },
-    { id: "chou", name: "Chou", lanes: ["EXP", "Roam"], banWeight: 5, pickWeight: 7 },
-    { id: "terizla", name: "Terizla", lanes: ["EXP"], banWeight: 6, pickWeight: 8 },
-    { id: "paquito", name: "Paquito", lanes: ["EXP", "Jungle"], banWeight: 6, pickWeight: 7 },
-    { id: "arlott", name: "Arlott", lanes: ["EXP", "Roam"], banWeight: 7, pickWeight: 7 },
-    { id: "ruby", name: "Ruby", lanes: ["EXP", "Roam"], banWeight: 5, pickWeight: 7 },
-    { id: "tigreal", name: "Tigreal", lanes: ["Roam"], banWeight: 8, pickWeight: 8 },
-    { id: "diggie", name: "Diggie", lanes: ["Roam"], banWeight: 9, pickWeight: 8 },
-    { id: "mathilda", name: "Mathilda", lanes: ["Roam", "Mid"], banWeight: 9, pickWeight: 9 },
-    { id: "minotaur", name: "Minotaur", lanes: ["Roam"], banWeight: 7, pickWeight: 8 },
-    { id: "angela", name: "Angela", lanes: ["Roam"], banWeight: 6, pickWeight: 7 },
-    { id: "fredrinn", name: "Fredrinn", lanes: ["Jungle", "EXP"], banWeight: 6, pickWeight: 7 },
-    { id: "pharsa", name: "Pharsa", lanes: ["Mid"], banWeight: 5, pickWeight: 7 },
-    { id: "valentina", name: "Valentina", lanes: ["Mid"], banWeight: 8, pickWeight: 8 },
-    { id: "novaria", name: "Novaria", lanes: ["Mid"], banWeight: 6, pickWeight: 7 },
-    { id: "yve", name: "Yve", lanes: ["Mid"], banWeight: 5, pickWeight: 6 },
-    { id: "xavier", name: "Xavier", lanes: ["Mid"], banWeight: 5, pickWeight: 7 },
-    { id: "beatrix", name: "Beatrix", lanes: ["Gold"], banWeight: 4, pickWeight: 7 },
-    { id: "wanwan", name: "Wanwan", lanes: ["Gold"], banWeight: 8, pickWeight: 7 },
-    { id: "claude", name: "Claude", lanes: ["Gold"], banWeight: 6, pickWeight: 8 },
-    { id: "karrie", name: "Karrie", lanes: ["Gold"], banWeight: 5, pickWeight: 7 },
-    { id: "brody", name: "Brody", lanes: ["Gold"], banWeight: 5, pickWeight: 7 }
-];
+const AI_DECISION_DELAY_MS = 1000;
+const SIM_AUTO_INTERVAL_MS = 1000;
+const PVP_DISCONNECT_TIMEOUT_MS = 30000;
 
 // 20-Step Draft Sequence Rules
 const DRAFT_SEQUENCE = [
@@ -71,7 +44,6 @@ const DRAFT_SEQUENCE = [
 
 const activeRooms = {};
 
-// Helper: Sanitize alphanumeric strings
 function sanitizeString(input, maxLen = 20) {
     if (typeof input !== 'string') return '';
     return input.trim().replace(/[^a-zA-Z0-9_-]/g, '').substring(0, maxLen);
@@ -89,30 +61,35 @@ function generateUniqueRoomId() {
     return result;
 }
 
-function createFreshDraftState() {
+function createFreshDraftState(currentVersion = 1) {
     return {
+        version: currentVersion,
         currentTurnIndex: 0,
         isComplete: false,
+        started: false,
         bans: { A: [], B: [] },
         picks: { A: [], B: [] },
         draftLog: []
     };
 }
 
-function selectWeightedRandomHero(heroList, weightKey) {
+function selectWeightedRandomHero(heroList, weightCalculator) {
     if (!heroList || heroList.length === 0) return null;
-    const totalWeight = heroList.reduce((sum, hero) => sum + (hero[weightKey] || 5), 0);
+    const weights = heroList.map(h => Math.max(0.1, weightCalculator(h)));
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
     let randomRoll = Math.random() * totalWeight;
 
-    for (const hero of heroList) {
-        randomRoll -= (hero[weightKey] || 5);
-        if (randomRoll <= 0) return hero;
+    for (let i = 0; i < heroList.length; i++) {
+        randomRoll -= weights[i];
+        if (randomRoll <= 0) return heroList[i];
     }
     return heroList[0];
 }
 
 function computeAIMoveForTeam(draftState, activeTeam) {
     const currentTurn = DRAFT_SEQUENCE[draftState.currentTurnIndex];
+    if (!currentTurn) return null;
+
     const allBannedIds = [...draftState.bans.A, ...draftState.bans.B].map(h => h.id);
     const allPickedIds = [...draftState.picks.A, ...draftState.picks.B].map(h => h.id);
     const availableHeroes = HERO_DATASET.filter(h => !allBannedIds.includes(h.id) && !allPickedIds.includes(h.id));
@@ -120,30 +97,42 @@ function computeAIMoveForTeam(draftState, activeTeam) {
     if (availableHeroes.length === 0) return null;
 
     if (currentTurn.action === 'ban') {
-        return selectWeightedRandomHero(availableHeroes, 'banWeight');
+        return selectWeightedRandomHero(availableHeroes, h => getHeroBanRate(h));
     }
 
     const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
     const teamCoveredLanes = new Set();
-    draftState.picks[activeTeam].forEach(hero => (hero.lanes || []).forEach(l => teamCoveredLanes.add(l)));
+    draftState.picks[activeTeam].forEach(hero => {
+        getHeroLanes(hero).forEach(l => teamCoveredLanes.add(l));
+    });
     const neededLanes = ALL_LANES.filter(l => !teamCoveredLanes.has(l));
 
-    let candidateHeroes = [];
+    let candidateHeroes = availableHeroes;
     if (neededLanes.length > 0) {
-        candidateHeroes = availableHeroes.filter(hero => hero.lanes.some(lane => neededLanes.includes(lane)));
-    }
-    if (candidateHeroes.length === 0) {
-        candidateHeroes = availableHeroes;
+        const laneCandidates = availableHeroes.filter(hero => {
+            const lanes = getHeroLanes(hero);
+            return lanes.some(lane => neededLanes.includes(lane));
+        });
+        if (laneCandidates.length > 0) {
+            candidateHeroes = laneCandidates;
+        }
     }
 
-    return selectWeightedRandomHero(candidateHeroes, 'pickWeight');
+    return selectWeightedRandomHero(candidateHeroes, h => {
+        // Weight selection by explicit role-specific pick rates
+        if (neededLanes.length > 0) {
+            const matchedLane = neededLanes.find(l => h.roles && h.roles[l]);
+            if (matchedLane) return h.roles[matchedLane].pickRate;
+        }
+        return getHeroPickRate(h);
+    });
 }
 
 function executeDraftStep(roomId) {
     const room = activeRooms[roomId];
     if (!room) return false;
     const draft = room.draftState;
-    if (draft.isComplete) return false;
+    if (draft.isComplete || draft.currentTurnIndex >= DRAFT_SEQUENCE.length) return false;
 
     const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
     const selectedHero = computeAIMoveForTeam(draft, currentTurn.team);
@@ -164,6 +153,8 @@ function executeDraftStep(roomId) {
     });
 
     draft.currentTurnIndex++;
+    draft.version = (draft.version || 0) + 1;
+
     if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
         draft.isComplete = true;
         if (room.simInterval) {
@@ -175,7 +166,9 @@ function executeDraftStep(roomId) {
     io.to(roomId).emit('draft_updated', {
         roomId: roomId,
         draftState: draft,
-        status: room.status
+        status: room.status,
+        mode: room.mode,
+        players: getRoomPlayersSummary(room)
     });
 
     return true;
@@ -185,12 +178,16 @@ function processAITurnIfNecessary(roomId) {
     const room = activeRooms[roomId];
     if (!room || room.mode !== 'vs_ai') return;
     const draft = room.draftState;
-    if (draft.isComplete) return;
+    if (draft.isComplete || draft.currentTurnIndex >= DRAFT_SEQUENCE.length) return;
 
     const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
-    if (currentTurn.team === 'B') {
-        setTimeout(() => {
-            if (!activeRooms[roomId] || draft.isComplete) return;
+    if (currentTurn && currentTurn.team === 'B') {
+        const generation = room.generationId;
+
+        if (room.aiTimer) clearTimeout(room.aiTimer);
+        room.aiTimer = setTimeout(() => {
+            if (!activeRooms[roomId] || room.generationId !== generation || draft.isComplete) return;
+
             const success = executeDraftStep(roomId);
             if (success) {
                 processAITurnIfNecessary(roomId);
@@ -199,20 +196,67 @@ function processAITurnIfNecessary(roomId) {
     }
 }
 
+function performRoomReset(room, roomId) {
+    room.generationId = (room.generationId || 1) + 1;
+    room.pendingResetBy = null;
+
+    if (room.simInterval) {
+        clearInterval(room.simInterval);
+        room.simInterval = null;
+    }
+    if (room.aiTimer) {
+        clearTimeout(room.aiTimer);
+        room.aiTimer = null;
+    }
+
+    const nextVersion = ((room.draftState && room.draftState.version) || 0) + 10;
+    room.draftState = createFreshDraftState(nextVersion);
+    
+    if (room.mode === 'pvp') {
+        room.draftState.started = false;
+        if (room.players.A) room.players.A.ready = false;
+        if (room.players.B) room.players.B.ready = false;
+    } else {
+        room.draftState.started = true;
+    }
+
+    io.to(roomId).emit('draft_updated', {
+        roomId: roomId,
+        draftState: room.draftState,
+        status: room.status,
+        mode: room.mode,
+        players: getRoomPlayersSummary(room),
+        isReset: true
+    });
+}
+
+function destroyRoom(roomId, reason = 'Room closed.') {
+    const room = activeRooms[roomId];
+    if (!room) return;
+    if (room.simInterval) clearInterval(room.simInterval);
+    if (room.aiTimer) clearTimeout(room.aiTimer);
+    if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+
+    io.to(roomId).emit('room_dismissed', { message: reason });
+    delete activeRooms[roomId];
+    console.log(`[ROOM CLOSED] Room ${roomId}: ${reason}`);
+}
+
+function getRoomPlayersSummary(room) {
+    return {
+        A: room.players.A ? { connected: !!room.players.A.connected, ready: !!room.players.A.ready } : null,
+        B: room.players.B ? { connected: !!room.players.B.connected, ready: !!room.players.B.ready } : null
+    };
+}
+
 // =========================================================================
-// AUTHORITATIVE SOCKET EVENT HANDLING WITH FULL VALIDATION
+// SOCKET CONNECTION & EVENT LISTENERS
 // =========================================================================
 
 io.on('connection', (socket) => {
-    console.log(`[CONNECTED] Socket ID: ${socket.id}`);
-
-    // --- CREATE ROOM ---
+    // CREATE ROOM
     socket.on('create_room', (payload) => {
-        // Validation: payload structure
-        if (!payload || typeof payload !== 'object') {
-            socket.emit('room_error', { message: 'Malformed payload.' });
-            return;
-        }
+        if (!payload || typeof payload !== 'object') return;
 
         const playerToken = sanitizeString(payload.playerToken, 32);
         const mode = ['pvp', 'vs_ai', 'auto_sim'].includes(payload.mode) ? payload.mode : 'vs_ai';
@@ -221,14 +265,23 @@ io.on('connection', (socket) => {
         activeRooms[roomId] = {
             roomId: roomId,
             mode: mode,
+            hostToken: playerToken,
+            generationId: 1,
+            pendingResetBy: null,
+            cleanupTimer: null,
             players: {
-                A: mode === 'auto_sim' ? { socketId: 'AI_BOT_A', playerToken: 'AI_BOT_A' } : { socketId: socket.id, playerToken },
-                B: mode === 'pvp' ? null : { socketId: 'AI_BOT_B', playerToken: 'AI_BOT_B' }
+                A: mode === 'auto_sim' ? { socketId: 'AI_BOT_A', playerToken: 'AI_BOT_A', connected: true, ready: true } : { socketId: socket.id, playerToken, connected: true, ready: mode !== 'pvp' },
+                B: mode === 'pvp' ? null : { socketId: 'AI_BOT_B', playerToken: 'AI_BOT_B', connected: true, ready: true }
             },
-            status: 'ready',
+            status: mode === 'pvp' ? 'waiting' : 'ready',
             simInterval: null,
-            draftState: createFreshDraftState()
+            aiTimer: null,
+            draftState: createFreshDraftState(1)
         };
+
+        if (mode !== 'pvp') {
+            activeRooms[roomId].draftState.started = true;
+        }
 
         socket.join(roomId);
         socket.currentRoomId = roomId;
@@ -239,40 +292,69 @@ io.on('connection', (socket) => {
             roomId: roomId,
             yourTeam: socket.assignedTeam,
             mode: mode,
-            draftState: activeRooms[roomId].draftState
+            status: activeRooms[roomId].status,
+            draftState: activeRooms[roomId].draftState,
+            players: getRoomPlayersSummary(activeRooms[roomId])
         });
 
         io.to(roomId).emit('draft_updated', {
             roomId: roomId,
             draftState: activeRooms[roomId].draftState,
-            status: 'ready'
+            status: activeRooms[roomId].status,
+            mode: mode,
+            players: getRoomPlayersSummary(activeRooms[roomId])
         });
     });
 
-    // --- JOIN ROOM ---
+    // JOIN ROOM
     socket.on('join_room', (payload) => {
-        if (!payload || typeof payload !== 'object') {
-            socket.emit('room_error', { message: 'Malformed join payload.' });
-            return;
-        }
+        if (!payload || typeof payload !== 'object') return;
 
         const cleanRoomId = sanitizeString(payload.targetRoomId, 6).toUpperCase();
         const playerToken = sanitizeString(payload.playerToken, 32);
         const room = activeRooms[cleanRoomId];
 
-        // Guard 1: Room existence
         if (!room) {
-            socket.emit('room_error', { message: `Room '${cleanRoomId}' does not exist.` });
+            socket.emit('room_error', { message: `Room '${cleanRoomId}' does not exist or expired.` });
             return;
         }
 
-        // Guard 2: Reconnection validation
+        // Reconnect Auto-Sim
+        if (room.mode === 'auto_sim') {
+            if (room.cleanupTimer) {
+                clearTimeout(room.cleanupTimer);
+                room.cleanupTimer = null;
+            }
+            socket.join(cleanRoomId);
+            socket.currentRoomId = cleanRoomId;
+            socket.assignedTeam = 'SPEC';
+            socket.playerToken = playerToken;
+
+            socket.emit('room_joined', {
+                roomId: cleanRoomId,
+                yourTeam: 'SPEC',
+                mode: room.mode,
+                status: room.status,
+                draftState: room.draftState,
+                players: getRoomPlayersSummary(room)
+            });
+            return;
+        }
+
+        // Reconnect Existing Player
         let existingTeam = null;
         if (room.players.A && room.players.A.playerToken === playerToken) existingTeam = 'A';
         if (room.players.B && room.players.B.playerToken === playerToken) existingTeam = 'B';
 
         if (existingTeam) {
+            if (room.cleanupTimer) {
+                clearTimeout(room.cleanupTimer);
+                room.cleanupTimer = null;
+            }
+
             room.players[existingTeam].socketId = socket.id;
+            room.players[existingTeam].connected = true;
+
             socket.join(cleanRoomId);
             socket.currentRoomId = cleanRoomId;
             socket.assignedTeam = existingTeam;
@@ -282,30 +364,33 @@ io.on('connection', (socket) => {
                 roomId: cleanRoomId,
                 yourTeam: existingTeam,
                 mode: room.mode,
-                draftState: room.draftState
+                status: room.status,
+                draftState: room.draftState,
+                players: getRoomPlayersSummary(room)
+            });
+
+            io.to(cleanRoomId).emit('player_reconnected', {
+                team: existingTeam,
+                players: getRoomPlayersSummary(room)
             });
 
             io.to(cleanRoomId).emit('draft_updated', {
                 roomId: cleanRoomId,
                 draftState: room.draftState,
-                status: 'ready'
+                status: room.status,
+                mode: room.mode,
+                players: getRoomPlayersSummary(room)
             });
             return;
         }
 
-        // Guard 3: Mode check
-        if (room.mode !== 'pvp') {
-            socket.emit('room_error', { message: 'Cannot join a single-player or simulation lobby.' });
+        // New Player Joining PvP
+        if (room.mode !== 'pvp' || (room.players.A && room.players.B)) {
+            socket.emit('room_error', { message: 'Cannot join room (Full or Not in PvP mode).' });
             return;
         }
 
-        // Guard 4: Capacity check
-        if (room.players.A && room.players.B) {
-            socket.emit('room_error', { message: 'This draft room is full (Max 2 players).' });
-            return;
-        }
-
-        room.players.B = { socketId: socket.id, playerToken: playerToken, connected: true };
+        room.players.B = { socketId: socket.id, playerToken: playerToken, connected: true, ready: false };
         socket.join(cleanRoomId);
         socket.currentRoomId = cleanRoomId;
         socket.assignedTeam = 'B';
@@ -315,77 +400,79 @@ io.on('connection', (socket) => {
             roomId: cleanRoomId,
             yourTeam: 'B',
             mode: room.mode,
-            draftState: room.draftState
+            status: room.status,
+            draftState: room.draftState,
+            players: getRoomPlayersSummary(room)
         });
 
         io.to(cleanRoomId).emit('draft_updated', {
             roomId: cleanRoomId,
             draftState: room.draftState,
-            status: 'ready'
+            status: room.status,
+            mode: room.mode,
+            players: getRoomPlayersSummary(room)
         });
     });
 
-    // --- AUTHORITATIVE HERO SELECTION (SELECT HERO) ---
-    socket.on('select_hero', (payload) => {
-        // 1. Payload validation
-        if (!payload || typeof payload !== 'object' || typeof payload.heroId !== 'string') {
-            socket.emit('draft_error', { message: 'Invalid hero payload.' });
-            return;
+    // TOGGLE READY
+    socket.on('toggle_ready', () => {
+        const roomId = socket.currentRoomId;
+        const playerTeam = socket.assignedTeam;
+        const room = activeRooms[roomId];
+        if (!room || room.mode !== 'pvp' || room.draftState.started) return;
+
+        if (room.players[playerTeam]) {
+            room.players[playerTeam].ready = !room.players[playerTeam].ready;
         }
 
+        const bothReady = room.players.A && room.players.B && room.players.A.connected && room.players.B.connected && room.players.A.ready && room.players.B.ready;
+
+        if (bothReady) {
+            room.draftState.started = true;
+            room.status = 'drafting';
+        }
+
+        io.to(roomId).emit('draft_updated', {
+            roomId: roomId,
+            draftState: room.draftState,
+            status: bothReady ? 'drafting' : 'waiting',
+            mode: room.mode,
+            players: getRoomPlayersSummary(room)
+        });
+    });
+
+    // HUMAN SELECTION
+    socket.on('select_hero', (payload) => {
+        if (!payload || typeof payload.heroId !== 'string') return;
         const heroId = sanitizeString(payload.heroId, 30).toLowerCase();
         const roomId = socket.currentRoomId;
-
-        // 2. Room membership validation
-        if (!roomId || !activeRooms[roomId]) {
-            socket.emit('draft_error', { message: 'You are not connected to a valid room.' });
-            return;
-        }
-
         const room = activeRooms[roomId];
-        if (room.mode === 'auto_sim') {
-            socket.emit('draft_error', { message: 'Manual picks are disabled in Auto-Sim mode.' });
+        if (!room || room.mode === 'auto_sim') return;
+
+        if (!room.draftState.started) {
+            socket.emit('draft_error', { message: 'The draft has not started yet.' });
             return;
         }
 
-        // 3. Team assignment validation
+        if (room.mode === 'pvp' && (!room.players.A || !room.players.B || !room.players.A.connected || !room.players.B.connected)) {
+            socket.emit('draft_error', { message: 'Waiting for both players to connect.' });
+            return;
+        }
+
         const playerTeam = socket.assignedTeam;
-        if (playerTeam !== 'A' && playerTeam !== 'B') {
-            socket.emit('draft_error', { message: 'You do not have a valid team assignment.' });
-            return;
-        }
-
         const draft = room.draftState;
+        if (draft.isComplete || draft.currentTurnIndex >= DRAFT_SEQUENCE.length) return;
 
-        // 4. Draft completion validation
-        if (draft.isComplete || draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
-            socket.emit('draft_error', { message: 'The draft has already finished!' });
-            return;
-        }
-
-        // 5. Turn ownership & Phase validation
         const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
-        if (currentTurn.team !== playerTeam) {
-            socket.emit('draft_error', { message: `Not your turn! Waiting for Team ${currentTurn.team}.` });
-            return;
-        }
+        if (!currentTurn || currentTurn.team !== playerTeam) return;
 
-        // 6. Master Hero DB validation
         const hero = HERO_DATASET.find(h => h.id === heroId);
-        if (!hero) {
-            socket.emit('draft_error', { message: `Hero '${heroId}' does not exist in the database.` });
-            return;
-        }
+        if (!hero) return;
 
-        // 7. Hero availability validation
         const allBanned = [...draft.bans.A, ...draft.bans.B].map(h => h.id);
         const allPicked = [...draft.picks.A, ...draft.picks.B].map(h => h.id);
-        if (allBanned.includes(heroId) || allPicked.includes(heroId)) {
-            socket.emit('draft_error', { message: `${hero.name} has already been banned or picked!` });
-            return;
-        }
+        if (allBanned.includes(heroId) || allPicked.includes(heroId)) return;
 
-        // --- 8. ATOMIC STATE UPDATE ---
         if (currentTurn.action === 'ban') {
             draft.bans[playerTeam].push(hero);
         } else {
@@ -401,36 +488,35 @@ io.on('connection', (socket) => {
         });
 
         draft.currentTurnIndex++;
+        draft.version = (draft.version || 0) + 1;
 
         if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
             draft.isComplete = true;
         }
 
-        console.log(`[ACTION VALIDATED] Room ${roomId} | Turn ${currentTurn.turn} | Team ${playerTeam} ${currentTurn.action}ed ${hero.name}`);
-
-        // Broadcast authoritative state
         io.to(roomId).emit('draft_updated', {
             roomId: roomId,
             draftState: draft,
-            status: room.status
+            status: room.status,
+            mode: room.mode,
+            players: getRoomPlayersSummary(room)
         });
 
-        // Trigger AI step if playing Vs AI
         processAITurnIfNecessary(roomId);
     });
 
-    // --- SIMULATION CONTROLS VALIDATION ---
+    // SIMULATION CONTROLS
     socket.on('sim_step', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'auto_sim') return;
+        if (!room || room.mode === 'pvp') return;
         executeDraftStep(roomId);
     });
 
     socket.on('sim_start_auto', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'auto_sim' || room.simInterval) return;
+        if (!room || room.mode === 'pvp' || room.simInterval) return;
 
         room.simInterval = setInterval(() => {
             if (!activeRooms[roomId] || room.draftState.isComplete) {
@@ -446,42 +532,109 @@ io.on('connection', (socket) => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
         if (!room || !room.simInterval) return;
+
         clearInterval(room.simInterval);
         room.simInterval = null;
     });
 
-    socket.on('sim_reset', () => {
+    // RESET CONTROLS
+    socket.on('request_reset', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'auto_sim') return;
+        if (!room) return;
 
-        if (room.simInterval) {
-            clearInterval(room.simInterval);
-            room.simInterval = null;
+        if (room.mode === 'vs_ai' || room.mode === 'auto_sim') {
+            performRoomReset(room, roomId);
+            return;
         }
 
-        room.draftState = createFreshDraftState();
+        if (room.mode === 'pvp') {
+            const requesterTeam = socket.assignedTeam;
+            const opponentTeam = requesterTeam === 'A' ? 'B' : 'A';
+            const opponent = room.players[opponentTeam];
+
+            if (!opponent || !opponent.connected) {
+                performRoomReset(room, roomId);
+                return;
+            }
+
+            room.pendingResetBy = requesterTeam;
+
+            io.to(opponent.socketId).emit('reset_requested', {
+                requestedByTeam: requesterTeam
+            });
+
+            socket.emit('reset_status', {
+                message: 'Reset request sent. Waiting for opponent approval...'
+            });
+        }
+    });
+
+    socket.on('respond_reset', ({ approved }) => {
+        const roomId = socket.currentRoomId;
+        const room = activeRooms[roomId];
+        if (!room || room.mode !== 'pvp' || !room.pendingResetBy) return;
+
+        const requesterTeam = room.pendingResetBy;
+        const requester = room.players[requesterTeam];
+
+        if (approved) {
+            performRoomReset(room, roomId);
+            io.to(roomId).emit('reset_status', { message: 'Draft was reset by mutual agreement.' });
+        } else {
+            room.pendingResetBy = null;
+            if (requester && requester.connected) {
+                io.to(requester.socketId).emit('reset_declined', {
+                    message: 'Your opponent declined the draft reset.'
+                });
+            }
+        }
+    });
+
+    // DISCONNECT
+    socket.on('disconnect', () => {
+        const roomId = socket.currentRoomId;
+        const playerTeam = socket.assignedTeam;
+        if (!roomId || !activeRooms[roomId]) return;
+
+        const room = activeRooms[roomId];
+
+        if (room.mode === 'vs_ai' || room.mode === 'auto_sim') {
+            if (room.simInterval) {
+                clearInterval(room.simInterval);
+                room.simInterval = null;
+            }
+            if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+            room.cleanupTimer = setTimeout(() => destroyRoom(roomId, 'Session closed.'), 45000);
+            return;
+        }
+
+        if (room.players[playerTeam]) {
+            room.players[playerTeam].connected = false;
+            room.players[playerTeam].ready = false;
+        }
+
+        socket.to(roomId).emit('player_disconnected', {
+            disconnectedTeam: playerTeam,
+            timeoutSeconds: PVP_DISCONNECT_TIMEOUT_MS / 1000
+        });
+
         io.to(roomId).emit('draft_updated', {
             roomId: roomId,
             draftState: room.draftState,
-            status: 'ready'
+            status: 'waiting',
+            mode: room.mode,
+            players: getRoomPlayersSummary(room)
         });
-    });
 
-    // --- CLEANUP ON DISCONNECT ---
-    socket.on('disconnect', () => {
-        const roomId = socket.currentRoomId;
-        if (!roomId || !activeRooms[roomId]) return;
-        const room = activeRooms[roomId];
-
-        if (room.simInterval) clearInterval(room.simInterval);
-        if (room.mode !== 'pvp') {
-            delete activeRooms[roomId];
-        }
+        if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+        room.cleanupTimer = setTimeout(() => {
+            destroyRoom(roomId, 'Room dismissed: Opponent failed to reconnect within 30 seconds.');
+        }, PVP_DISCONNECT_TIMEOUT_MS);
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`MLBB Authoritative Secure Server running at http://localhost:${PORT}`);
+    console.log(`MLBB Authoritative Server running at http://localhost:${PORT}`);
 });

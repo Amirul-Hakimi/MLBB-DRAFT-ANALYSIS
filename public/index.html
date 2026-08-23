@@ -28,7 +28,7 @@
             </div>
         </header>
 
-        <!-- Lobby Setup Screen -->
+        <!-- 1. HOME SCREEN: MATCH SETUP -->
         <main id="setup-screen" class="screen active">
             <div class="hero-header">
                 <h1 class="glow-text">TOURNAMENT DRAFT SIMULATOR</h1>
@@ -77,20 +77,69 @@
 
                 <div id="join-input-group" class="input-group hidden">
                     <label for="room-id-input">Room Code</label>
-                    <input type="text" id="room-id-input" placeholder="e.g. A3K9M2" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters">
+                    <input type="text" id="room-id-input" placeholder="e.g. A3K9M2" maxlength="6" autocomplete="off" autocapitalize="characters">
                 </div>
 
                 <button id="btn-enter-room" class="btn btn-gold btn-large">
-                    <span>Enter Draft Arena</span>
+                    <span>Enter Lobby</span>
                     <span class="btn-arrow">→</span>
                 </button>
             </div>
         </main>
 
-        <!-- Draft Arena Screen -->
+        <!-- 2. STAGING LOBBY SCREEN (WAITING & READY ROOM) -->
+        <section id="lobby-screen" class="screen hidden">
+            <div class="card lobby-card">
+                <div class="lobby-header">
+                    <span class="lobby-badge" id="lobby-mode-badge">PVP MULTIPLAYER</span>
+                    <h2>MATCH LOBBY</h2>
+                    <p class="card-desc">Both players must Ready Up to start the tournament draft</p>
+                </div>
+
+                <!-- Shareable Room Code Box -->
+                <div class="room-share-box">
+                    <div class="share-label">SHARE ROOM CODE</div>
+                    <div class="share-code-row">
+                        <span id="lobby-room-code" class="share-code">------</span>
+                        <button id="btn-copy-code" class="btn btn-secondary btn-sm">📋 Copy</button>
+                    </div>
+                    <span id="copy-toast" class="copy-toast hidden">Copied to clipboard!</span>
+                </div>
+
+                <!-- Versus Staging Slots -->
+                <div class="staging-slots-grid">
+                    <div class="slot-card blue-slot" id="lobby-slot-a">
+                        <div class="slot-team-tag">BLUE TEAM (A)</div>
+                        <div class="slot-avatar">🛡️</div>
+                        <div class="slot-player-name" id="lobby-player-a-name">Host (You)</div>
+                        <div class="slot-status-badge waiting" id="lobby-player-a-status">WAITING</div>
+                    </div>
+
+                    <div class="staging-vs-divider">VS</div>
+
+                    <div class="slot-card red-slot" id="lobby-slot-b">
+                        <div class="slot-team-tag">RED TEAM (B)</div>
+                        <div class="slot-avatar">⚔️</div>
+                        <div class="slot-player-name" id="lobby-player-b-name">Waiting for Player...</div>
+                        <div class="slot-status-badge waiting" id="lobby-player-b-status">WAITING</div>
+                    </div>
+                </div>
+
+                <!-- Staging Ready Actions -->
+                <div class="lobby-actions-footer">
+                    <button id="btn-lobby-leave" class="btn btn-outline-danger">Leave Lobby</button>
+                    <button id="btn-toggle-ready" class="btn btn-gold btn-large">
+                        <span id="ready-btn-text">READY UP</span>
+                        <span class="btn-arrow">✓</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. DRAFT ARENA SCREEN -->
         <section id="draft-screen" class="screen hidden">
             
-            <!-- Auto-Sim Control Toolbar -->
+            <!-- Auto-Sim Control Toolbar (Shown ONLY in auto_sim) -->
             <div id="sim-control-bar" class="sim-toolbar hidden">
                 <div class="sim-label">
                     <span class="sim-indicator"></span>
@@ -100,7 +149,7 @@
                     <button id="btn-sim-step" class="btn btn-secondary btn-sm">▶ Step (+1 Turn)</button>
                     <button id="btn-sim-auto" class="btn btn-gold btn-sm">⚡ Auto-Play</button>
                     <button id="btn-sim-pause" class="btn btn-secondary btn-sm">⏸ Pause</button>
-                    <button id="btn-sim-reset" class="btn btn-danger btn-sm">🔄 Reset</button>
+                    <button id="btn-sim-reset" class="btn btn-danger btn-sm">🔄 Reset Draft</button>
                 </div>
             </div>
 
@@ -124,6 +173,7 @@
                     </div>
                     <div id="turn-banner-text" class="turn-headline">READY TO DRAFT</div>
                     <div id="phase-banner-text" class="phase-badge">BAN PHASE 1</div>
+                    <div id="reset-status-banner" class="status-subtext hidden"></div>
                 </div>
 
                 <!-- Team Red (B) -->
@@ -169,10 +219,10 @@
                     <div class="lane-filter-tabs">
                         <button class="lane-btn active" data-lane="ALL">ALL</button>
                         <button class="lane-btn" data-lane="EXP">EXP</button>
-                        <button class="lane-btn" data-lane="Jungle">JUNGLE</button>
-                        <button class="lane-btn" data-lane="Mid">MID</button>
-                        <button class="lane-btn" data-lane="Gold">GOLD</button>
-                        <button class="lane-btn" data-lane="Roam">ROAM</button>
+                        <button class="lane-btn" data-lane="JUNGLE">JUNGLE</button>
+                        <button class="lane-btn" data-lane="MID">MID</button>
+                        <button class="lane-btn" data-lane="GOLD">GOLD</button>
+                        <button class="lane-btn" data-lane="ROAM">ROAM</button>
                     </div>
                 </div>
 
@@ -180,7 +230,7 @@
                 <div id="hero-grid" class="hero-grid"></div>
             </div>
 
-            <!-- Action Log & Leave Footer -->
+            <!-- Action Log & Room Controls Footer -->
             <div class="bottom-tools-grid">
                 <div class="draft-log-box">
                     <div class="log-header">📜 Chronological Action Ticker</div>
@@ -188,10 +238,27 @@
                 </div>
 
                 <div class="footer-actions">
+                    <button id="btn-manual-reset" class="btn btn-secondary">🔄 Reset Draft</button>
                     <button id="btn-leave-room" class="btn btn-outline-danger">Exit Room</button>
                 </div>
             </div>
         </section>
+
+        <!-- PvP Reset Confirmation Modal -->
+        <div id="reset-confirm-modal" class="modal-overlay hidden">
+            <div class="modal-card modal-sm">
+                <div class="modal-header">
+                    <h2>Reset Draft Request</h2>
+                </div>
+                <p id="reset-request-text" class="disclaimer-text">
+                    Your opponent has requested to reset the current draft to Turn 1. Do you agree?
+                </p>
+                <div class="modal-actions-dual">
+                    <button id="btn-accept-reset" class="btn btn-gold">Accept Reset</button>
+                    <button id="btn-decline-reset" class="btn btn-secondary">Decline</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Post-Draft Comparison Modal -->
         <div id="post-draft-modal" class="modal-overlay hidden">
@@ -204,7 +271,7 @@
                 </div>
 
                 <p class="disclaimer-text">
-                    ⚠️ <strong>Evaluation Note:</strong> This score is a heuristic analysis of lane balance, counter-pick potential, and meta tiers. It does <strong>not</strong> guarantee match victory.
+                    ⚠️ <strong>Evaluation Note:</strong> This score is a heuristic analysis of lane balance and meta priority. It does <strong>not</strong> guarantee match victory.
                 </p>
 
                 <!-- Comparison Score Cards -->
@@ -250,10 +317,36 @@
         </div>
     </div>
 
+
+<!-- Opponent Disconnected Countdown Modal -->
+<div id="disconnect-modal" class="modal-overlay hidden">
+    <div class="modal-card modal-sm">
+        <div class="modal-header">
+            <h2 style="color: var(--red-side);">⚠️ Opponent Disconnected</h2>
+        </div>
+        <p class="disclaimer-text" id="disconnect-modal-text">
+            Your opponent left the room. Waiting for them to reconnect...
+        </p>
+        <div class="countdown-display" style="font-family: var(--font-heading); font-size: 3rem; font-weight: 700; color: var(--gold-accent); margin: 15px 0;">
+            <span id="disconnect-countdown">30</span>s
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;">
+            The room will automatically close if the opponent does not return.
+        </p>
+        <button id="btn-leave-now" class="btn btn-outline-danger btn-large">Leave Room Now</button>
+    </div>
+</div>
+
+
+
     <!-- Script Dependencies -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/hero-data.js"></script>
     <script src="/js/draft-engine.js"></script>
     <script src="/js/main.js"></script>
+
+    
+
+
 </body>
 </html>

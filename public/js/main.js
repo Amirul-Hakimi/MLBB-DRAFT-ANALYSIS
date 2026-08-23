@@ -1,8 +1,12 @@
 // =========================================================================
-// MAIN CLIENT INTERACTIVITY, REAL-TIME SYNC, SIMULATION & EVALUATION
+// MAIN CLIENT INTERACTIVITY, DISCONNECT COUNTDOWN & REAL-TIME SYNC
 // =========================================================================
 
-const socket = io();
+const socket = io({
+    reconnection: true,
+    reconnectionAttempts: 20,
+    reconnectionDelay: 1000
+});
 
 function getOrCreatePlayerToken() {
     let token = sessionStorage.getItem('mlbb_player_token');
@@ -15,9 +19,10 @@ function getOrCreatePlayerToken() {
 
 const myPlayerToken = getOrCreatePlayerToken();
 
-// Core Screen References
+// Screen Elements
 const connectionStatus = document.getElementById('connection-status');
 const setupScreen = document.getElementById('setup-screen');
+const lobbyScreen = document.getElementById('lobby-screen');
 const draftScreen = document.getElementById('draft-screen');
 
 // Setup Controls
@@ -28,16 +33,35 @@ const btnModeJoin = document.getElementById('btn-mode-join');
 const joinInputGroup = document.getElementById('join-input-group');
 const roomIdInput = document.getElementById('room-id-input');
 const btnEnterRoom = document.getElementById('btn-enter-room');
-const btnLeaveRoom = document.getElementById('btn-leave-room');
 
-// Sim Toolbar Controls
+// Lobby Staging Controls
+const lobbyRoomCode = document.getElementById('lobby-room-code');
+const btnCopyCode = document.getElementById('btn-copy-code');
+const copyToast = document.getElementById('copy-toast');
+const lobbyPlayerAName = document.getElementById('lobby-player-a-name');
+const lobbyPlayerAStatus = document.getElementById('lobby-player-a-status');
+const lobbyPlayerBName = document.getElementById('lobby-player-b-name');
+const lobbyPlayerBStatus = document.getElementById('lobby-player-b-status');
+const btnToggleReady = document.getElementById('btn-toggle-ready');
+const readyBtnText = document.getElementById('ready-btn-text');
+const btnLobbyLeave = document.getElementById('btn-lobby-leave');
+
+// Disconnect Modal Controls
+const disconnectModal = document.getElementById('disconnect-modal');
+const disconnectCountdown = document.getElementById('disconnect-countdown');
+const disconnectModalText = document.getElementById('disconnect-modal-text');
+const btnLeaveNow = document.getElementById('btn-leave-now');
+let disconnectInterval = null;
+
+// Draft Board Controls
 const simControlBar = document.getElementById('sim-control-bar');
 const btnSimStep = document.getElementById('btn-sim-step');
 const btnSimAuto = document.getElementById('btn-sim-auto');
 const btnSimPause = document.getElementById('btn-sim-pause');
 const btnSimReset = document.getElementById('btn-sim-reset');
+const btnManualReset = document.getElementById('btn-manual-reset');
+const btnLeaveRoom = document.getElementById('btn-leave-room');
 
-// Draft Board Controls
 const heroGrid = document.getElementById('hero-grid');
 const heroSearch = document.getElementById('hero-search');
 const laneButtons = document.querySelectorAll('.lane-btn');
@@ -54,7 +78,13 @@ const redPicks = document.getElementById('red-picks');
 const timelineStrip = document.getElementById('timeline-strip');
 const draftLogList = document.getElementById('draft-log-list');
 
-// Evaluation Modal Controls
+// Reset Approval Controls
+const resetConfirmModal = document.getElementById('reset-confirm-modal');
+const btnAcceptReset = document.getElementById('btn-accept-reset');
+const btnDeclineReset = document.getElementById('btn-decline-reset');
+const resetStatusBanner = document.getElementById('reset-status-banner');
+
+// Post-Draft Modal Controls
 const postDraftModal = document.getElementById('post-draft-modal');
 const btnCloseModal = document.getElementById('btn-close-modal');
 const scoreTeamA = document.getElementById('score-team-a');
@@ -68,41 +98,227 @@ const compBansB = document.getElementById('comp-bans-b');
 const compLanesA = document.getElementById('comp-lanes-a');
 const compLanesB = document.getElementById('comp-lanes-b');
 
-// App Global States
-let currentMode = 'vs_ai'; // 'vs_ai', 'auto_sim', 'create', 'join'
+let currentMode = 'vs_ai';
 let currentSearchQuery = '';
 let currentLaneFilter = 'ALL';
+let isSubmittingAction = false;
 window.myAssignedTeam = null;
 window.currentRoomId = null;
 window.currentRoomMode = null;
 
 // =========================================================================
-// SOCKET CONNECTION & DRAFT UPDATES
+// HERO PORTRAIT & FALLBACK HELPER
+// =========================================================================
+
+/**
+ * Creates an image element with a robust fallback to initials if the portrait fails to load.
+ */
+function createHeroAvatarHTML(hero, extraClass = '') {
+    if (!hero) return '';
+    const initials = hero.name.substring(0, 2).toUpperCase();
+    const imgSrc = hero.image || '';
+
+    return `
+        <div class="hero-avatar-wrap ${extraClass}">
+            <img class="hero-avatar-img" 
+                 src="${imgSrc}" 
+                 alt="${hero.name}" 
+                 loading="lazy" 
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+            <div class="avatar-fallback" style="display: none;">${initials}</div>
+        </div>
+    `;
+}
+
+function findHeroById(id) {
+    return HERO_DATASET.find(h => h.id === id) || { id, name: id, lanes: [] };
+}
+
+// =========================================================================
+// SOCKET CONNECTION & LIFECYCLE
 // =========================================================================
 
 socket.on('connect', () => {
-    connectionStatus.className = 'status-badge connected';
-    connectionStatus.querySelector('.status-label').innerText = 'Online';
+    if (connectionStatus) {
+        connectionStatus.className = 'status-badge connected';
+        const label = connectionStatus.querySelector('.status-label');
+        if (label) label.innerText = 'Online';
+    }
+
+    const savedRoomId = sessionStorage.getItem('mlbb_active_room');
+    if (savedRoomId && !window.currentRoomId) {
+        socket.emit('join_room', {
+            targetRoomId: savedRoomId,
+            playerToken: myPlayerToken
+        });
+    }
 });
 
 socket.on('disconnect', () => {
-    connectionStatus.className = 'status-badge disconnected';
-    connectionStatus.querySelector('.status-label').innerText = 'Offline';
+    if (connectionStatus) {
+        connectionStatus.className = 'status-badge disconnected';
+        const label = connectionStatus.querySelector('.status-label');
+        if (label) label.innerText = 'Reconnecting...';
+    }
 });
 
-socket.on('draft_updated', ({ draftState: serverState }) => {
+socket.on('player_disconnected', ({ disconnectedTeam, timeoutSeconds }) => {
+    if (disconnectInterval) clearInterval(disconnectInterval);
+
+    let timeLeft = timeoutSeconds || 30;
+    disconnectCountdown.innerText = timeLeft;
+    disconnectModalText.innerText = `Opponent (Team ${disconnectedTeam}) disconnected. Waiting for them to return...`;
+    disconnectModal.classList.remove('hidden');
+
+    disconnectInterval = setInterval(() => {
+        timeLeft--;
+        disconnectCountdown.innerText = timeLeft;
+        if (timeLeft <= 0) clearInterval(disconnectInterval);
+    }, 1000);
+});
+
+socket.on('player_reconnected', () => {
+    if (disconnectInterval) clearInterval(disconnectInterval);
+    disconnectModal.classList.add('hidden');
+});
+
+socket.on('room_dismissed', ({ message }) => {
+    if (disconnectInterval) clearInterval(disconnectInterval);
+    disconnectModal.classList.add('hidden');
+    alert(message);
+    sessionStorage.removeItem('mlbb_active_room');
+    location.reload();
+});
+
+socket.on('draft_updated', ({ draftState: serverState, mode, status, players, isReset }) => {
+    if (!isReset && typeof draftState !== 'undefined' && draftState && draftState.version !== undefined && serverState.version !== undefined) {
+        if (serverState.version < draftState.version) return;
+    }
+
+    if (mode) window.currentRoomMode = mode;
     draftState = serverState;
-    updateUI();
+    isSubmittingAction = false;
+
+    if (window.currentRoomMode === 'pvp' && !draftState.started) {
+        showLobbyScreen(window.currentRoomId, players);
+    } else {
+        showDraftScreen(window.currentRoomId, window.currentRoomMode);
+        updateUI();
+    }
 });
 
-socket.on('draft_error', (data) => alert(`Action Error: ${data.message}`));
+socket.on('draft_error', (data) => {
+    isSubmittingAction = false;
+    alert(`Action Error: ${data.message}`);
+});
+
 socket.on('room_error', (data) => {
-    alert(`Room Error: ${data.message}`);
+    alert(data.message);
+    sessionStorage.removeItem('mlbb_active_room');
     showSetupScreen();
 });
 
 // =========================================================================
-// LOBBY MODE SWITCHING
+// SCREEN ROUTING & LOBBY MANAGEMENT
+// =========================================================================
+
+function showSetupScreen() {
+    draftScreen.classList.add('hidden');
+    lobbyScreen.classList.add('hidden');
+    setupScreen.classList.remove('hidden');
+}
+
+function showLobbyScreen(roomId, players) {
+    setupScreen.classList.add('hidden');
+    draftScreen.classList.add('hidden');
+    lobbyScreen.classList.remove('hidden');
+
+    lobbyRoomCode.innerText = roomId;
+
+    const myTeam = window.myAssignedTeam;
+    const playerA = players && players.A;
+    const playerB = players && players.B;
+
+    lobbyPlayerAName.innerText = myTeam === 'A' ? 'You (Team A)' : 'Opponent (Team A)';
+    if (playerA && playerA.connected) {
+        lobbyPlayerAStatus.innerText = playerA.ready ? 'READY' : 'WAITING';
+        lobbyPlayerAStatus.className = `slot-status-badge ${playerA.ready ? 'ready' : 'waiting'}`;
+    } else {
+        lobbyPlayerAStatus.innerText = 'OFFLINE';
+        lobbyPlayerAStatus.className = 'slot-status-badge waiting';
+    }
+
+    if (playerB && playerB.connected) {
+        lobbyPlayerBName.innerText = myTeam === 'B' ? 'You (Team B)' : 'Opponent (Team B)';
+        lobbyPlayerBStatus.innerText = playerB.ready ? 'READY' : 'WAITING';
+        lobbyPlayerBStatus.className = `slot-status-badge ${playerB.ready ? 'ready' : 'waiting'}`;
+    } else {
+        lobbyPlayerBName.innerText = 'Waiting for Player B...';
+        lobbyPlayerBStatus.innerText = 'WAITING';
+        lobbyPlayerBStatus.className = 'slot-status-badge waiting';
+    }
+
+    const myData = myTeam === 'A' ? playerA : playerB;
+    if (myData && myData.ready) {
+        btnToggleReady.className = 'btn btn-secondary btn-large';
+        readyBtnText.innerText = 'CANCEL READY';
+    } else {
+        btnToggleReady.className = 'btn btn-gold btn-large';
+        readyBtnText.innerText = 'READY UP';
+    }
+}
+
+function showDraftScreen(roomId, mode) {
+    if (roomDisplayTag) roomDisplayTag.innerText = `ROOM: ${roomId}`;
+    setupScreen.classList.add('hidden');
+    lobbyScreen.classList.add('hidden');
+    draftScreen.classList.remove('hidden');
+
+    if (simControlBar) {
+        if (mode === 'auto_sim') {
+            simControlBar.classList.remove('hidden');
+        } else {
+            simControlBar.classList.add('hidden');
+        }
+    }
+
+    if (btnManualReset) {
+        if (mode === 'auto_sim') {
+            btnManualReset.classList.add('hidden');
+        } else {
+            btnManualReset.classList.remove('hidden');
+        }
+    }
+}
+
+btnToggleReady.addEventListener('click', () => socket.emit('toggle_ready'));
+
+btnCopyCode.addEventListener('click', () => {
+    const code = lobbyRoomCode.innerText;
+    navigator.clipboard.writeText(code).then(() => {
+        copyToast.classList.remove('hidden');
+        setTimeout(() => copyToast.classList.add('hidden'), 2000);
+    });
+});
+
+btnLobbyLeave.addEventListener('click', () => {
+    sessionStorage.removeItem('mlbb_active_room');
+    location.reload();
+});
+
+btnLeaveRoom.addEventListener('click', () => {
+    sessionStorage.removeItem('mlbb_active_room');
+    location.reload();
+});
+
+btnLeaveNow.addEventListener('click', () => {
+    if (disconnectInterval) clearInterval(disconnectInterval);
+    sessionStorage.removeItem('mlbb_active_room');
+    location.reload();
+});
+
+// =========================================================================
+// MODE SELECTION & ENTRY
 // =========================================================================
 
 function setActiveModeCard(selectedBtn) {
@@ -152,17 +368,20 @@ btnEnterRoom.addEventListener('click', () => {
     }
 });
 
-btnLeaveRoom.addEventListener('click', () => {
-    sessionStorage.removeItem('mlbb_active_room');
-    location.reload();
-});
-
 socket.on('room_created', (data) => {
     window.currentRoomId = data.roomId;
     window.myAssignedTeam = data.yourTeam;
     window.currentRoomMode = data.mode;
     draftState = data.draftState;
-    showDraftScreen(data.roomId, data.mode);
+
+    sessionStorage.setItem('mlbb_active_room', data.roomId);
+
+    if (data.mode === 'pvp') {
+        showLobbyScreen(data.roomId, data.players);
+    } else {
+        showDraftScreen(data.roomId, data.mode);
+        updateUI();
+    }
 });
 
 socket.on('room_joined', (data) => {
@@ -170,20 +389,69 @@ socket.on('room_joined', (data) => {
     window.myAssignedTeam = data.yourTeam;
     window.currentRoomMode = data.mode;
     draftState = data.draftState;
-    showDraftScreen(data.roomId, data.mode);
+
+    sessionStorage.setItem('mlbb_active_room', data.roomId);
+
+    if (data.mode === 'pvp' && !data.draftState.started) {
+        showLobbyScreen(data.roomId, data.players);
+    } else {
+        showDraftScreen(data.roomId, data.mode);
+        updateUI();
+    }
 });
 
-// Auto-Sim Controls
-btnSimStep.addEventListener('click', () => socket.emit('sim_step'));
-btnSimAuto.addEventListener('click', () => socket.emit('sim_start_auto'));
-btnSimPause.addEventListener('click', () => socket.emit('sim_pause_auto'));
-btnSimReset.addEventListener('click', () => socket.emit('sim_reset'));
+// =========================================================================
+// RESET & SIM CONTROLS
+// =========================================================================
+
+socket.on('reset_requested', () => {
+    if (resetConfirmModal) resetConfirmModal.classList.remove('hidden');
+});
+
+socket.on('reset_status', ({ message }) => {
+    if (resetStatusBanner) {
+        resetStatusBanner.innerText = message;
+        resetStatusBanner.classList.remove('hidden');
+        setTimeout(() => {
+            if (resetStatusBanner) resetStatusBanner.classList.add('hidden');
+        }, 3500);
+    }
+});
+
+socket.on('reset_declined', ({ message }) => {
+    if (resetStatusBanner) {
+        resetStatusBanner.innerText = message;
+        resetStatusBanner.classList.remove('hidden');
+        setTimeout(() => resetStatusBanner.classList.add('hidden'), 4000);
+    }
+});
+
+if (btnAcceptReset) {
+    btnAcceptReset.addEventListener('click', () => {
+        socket.emit('respond_reset', { approved: true });
+        if (resetConfirmModal) resetConfirmModal.classList.add('hidden');
+    });
+}
+
+if (btnDeclineReset) {
+    btnDeclineReset.addEventListener('click', () => {
+        socket.emit('respond_reset', { approved: false });
+        if (resetConfirmModal) resetConfirmModal.classList.add('hidden');
+    });
+}
+
+if (btnManualReset) btnManualReset.addEventListener('click', () => socket.emit('request_reset'));
+if (btnSimReset) btnSimReset.addEventListener('click', () => socket.emit('request_reset'));
+if (btnSimStep) btnSimStep.addEventListener('click', () => socket.emit('sim_step'));
+if (btnSimAuto) btnSimAuto.addEventListener('click', () => socket.emit('sim_start_auto'));
+if (btnSimPause) btnSimPause.addEventListener('click', () => socket.emit('sim_pause_auto'));
 
 // =========================================================================
-// RENDERERS
+// RENDERERS (WITH CONSISTENT HERO PRESENTATION)
 // =========================================================================
 
 function renderTimeline() {
+    if (!timelineStrip) return;
     timelineStrip.innerHTML = '';
     DRAFT_SEQUENCE.forEach((step, index) => {
         const item = document.createElement('div');
@@ -202,11 +470,18 @@ function renderTimeline() {
 }
 
 function renderDraftLog() {
+    if (!draftLogList) return;
     draftLogList.innerHTML = '';
     draftState.draftLog.forEach(log => {
+        const heroObj = findHeroById(log.hero ? log.hero.toLowerCase() : '');
         const li = document.createElement('li');
         li.className = `team-${log.team}`;
-        li.innerText = `[Turn ${log.turn}] Team ${log.team} ${log.action.toUpperCase()}ED ${log.hero}`;
+        li.innerHTML = `
+            <div class="log-item-wrap">
+                ${createHeroAvatarHTML(heroObj, 'log-avatar')}
+                <span>[Turn ${log.turn}] Team ${log.team} ${log.action.toUpperCase()}ED <strong>${log.hero}</strong></span>
+            </div>
+        `;
         draftLogList.appendChild(li);
     });
     draftLogList.scrollTop = draftLogList.scrollHeight;
@@ -218,7 +493,7 @@ function renderRecommendations() {
     const recPanel = document.getElementById('recommendation-panel');
     if (!recContainer || !recPanel) return;
 
-    if (window.currentRoomMode === 'auto_sim') {
+    if (window.currentRoomMode === 'auto_sim' || draftState.isComplete) {
         recPanel.style.display = 'none';
         return;
     }
@@ -233,29 +508,44 @@ function renderRecommendations() {
     recContainer.innerHTML = '';
 
     if (recData.type === 'ban') {
-        recTitleText.innerText = 'Target Deny / High Priority Bans:';
+        recTitleText.innerText = 'High Priority Ban Suggestions:';
     } else {
         const laneStr = recData.neededLanes.length > 0 ? recData.neededLanes.join(', ') : 'Flex Fill';
-        recTitleText.innerText = `Optimal Picks (Needs: ${laneStr}):`;
+        recTitleText.innerText = `Suggested Picks (Needs: ${laneStr}):`;
     }
 
     recData.list.forEach(hero => {
         const chip = document.createElement('button');
         chip.className = 'rec-chip';
-        chip.innerHTML = `<span>${hero.name}</span> <small>(${hero.lanes.join('/')})</small>`;
-        chip.addEventListener('click', () => socket.emit('select_hero', { heroId: hero.id }));
+        chip.innerHTML = `
+            ${createHeroAvatarHTML(hero, 'rec-chip-avatar')}
+            <span>${hero.name}</span> 
+            <small>(${hero.lanes.join('/')})</small>
+        `;
+        chip.addEventListener('click', () => {
+            if (isSubmittingAction) return;
+            isSubmittingAction = true;
+            socket.emit('select_hero', { heroId: hero.id });
+        });
         recContainer.appendChild(chip);
     });
 }
 
+// Replace renderHeroGrid in public/js/main.js with this:
 function renderHeroGrid() {
+    if (!heroGrid) return;
     heroGrid.innerHTML = '';
     const recData = getRecommendations();
-    const recommendedIds = recData.list.map(h => h.id);
+    const recommendedIds = recData.list ? recData.list.map(h => h.id) : [];
 
     const filteredHeroes = HERO_DATASET.filter(hero => {
         const matchesName = hero.name.toLowerCase().includes(currentSearchQuery.toLowerCase());
-        const matchesLane = (currentLaneFilter === 'ALL') || hero.lanes.includes(currentLaneFilter);
+        
+        // CASE-INSENSITIVE ROLE MATCHING
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+        const matchesLane = (currentLaneFilter.toUpperCase() === 'ALL') || 
+            lanes.some(lane => lane.toUpperCase() === currentLaneFilter.toUpperCase());
+            
         return matchesName && matchesLane;
     });
 
@@ -273,56 +563,88 @@ function renderHeroGrid() {
             card.classList.add('recommended');
         }
 
-        const tagsHtml = hero.lanes.map(l => `<span class="tag">${l}</span>`).join('');
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+        const tagsHtml = lanes.map(l => `<span class="tag">${l}</span>`).join('');
         const badgeHtml = isRecommended ? `<span class="rec-badge">⭐ REC</span>` : '';
 
         card.innerHTML = `
             ${badgeHtml}
+            ${createHeroAvatarHTML(hero, 'hero-grid-avatar')}
             <div class="hero-name">${hero.name}</div>
             <div class="lane-tags">${tagsHtml}</div>
         `;
 
-        if (!isSimMode) {
-            card.addEventListener('click', () => socket.emit('select_hero', { heroId: hero.id }));
+        if (!isSimMode && !unavailable && !draftState.isComplete) {
+            card.addEventListener('click', () => {
+                if (isSubmittingAction) return;
+                isSubmittingAction = true;
+                socket.emit('select_hero', { heroId: hero.id });
+            });
         }
 
         heroGrid.appendChild(card);
     });
 }
 
+function renderBans(team, bansElement) {
+    if (!bansElement) return;
+    const bans = draftState.bans[team] || [];
+    if (bans.length === 0) {
+        bansElement.innerHTML = '<span style="color: var(--text-muted); font-style: italic;">None</span>';
+        return;
+    }
+    bansElement.innerHTML = bans.map(hero => `
+        <div class="ban-chip-item">
+            ${createHeroAvatarHTML(hero, 'ban-chip-avatar')}
+            <span>${hero.name}</span>
+        </div>
+    `).join('');
+}
+
 function renderSlots(team, picksListElement) {
+    if (!picksListElement) return;
     picksListElement.innerHTML = '';
-    const picks = draftState.picks[team];
+    const picks = draftState.picks[team] || [];
 
     for (let i = 0; i < 5; i++) {
         const hero = picks[i];
         const li = document.createElement('li');
-        li.className = 'pick-slot';
         if (hero) {
-            li.innerHTML = `<span>${hero.name}</span> <span class="slot-lanes">${hero.lanes.join('/')}</span>`;
+            li.className = 'pick-slot filled';
+            li.innerHTML = `
+                ${createHeroAvatarHTML(hero, 'pick-slot-avatar')}
+                <div class="pick-slot-info">
+                    <span class="pick-slot-name">${hero.name}</span>
+                    <span class="slot-lanes">${hero.lanes.join('/')}</span>
+                </div>
+            `;
         } else {
-            li.innerHTML = `<span style="color: var(--text-muted); font-style: italic;">Pick ${i + 1} Pending...</span>`;
+            li.className = 'pick-slot empty';
+            li.innerHTML = `<span>Pick ${i + 1} Pending...</span>`;
         }
         picksListElement.appendChild(li);
     }
 }
 
 function updateTurnStatusUI() {
-    blueBans.innerText = draftState.bans.A.map(h => h.name).join(', ') || 'None';
-    redBans.innerText = draftState.bans.B.map(h => h.name).join(', ') || 'None';
+    renderBans('A', blueBans);
+    renderBans('B', redBans);
 
     renderSlots('A', bluePicks);
     renderSlots('B', redPicks);
 
+    const turnAnnouncer = document.querySelector('.turn-announcer-center');
+
     if (draftState.isComplete && draftState.currentTurnIndex >= 20) {
-        turnBannerText.innerText = 'DRAFT COMPLETE';
-        phaseBannerText.innerText = 'Evaluation Ready';
-        teamABox.classList.remove('active-turn');
-        teamBBox.classList.remove('active-turn');
+        if (turnBannerText) turnBannerText.innerText = 'DRAFT COMPLETE';
+        if (phaseBannerText) phaseBannerText.innerText = 'Evaluation Ready';
+        if (turnAnnouncer) turnAnnouncer.className = 'turn-announcer-center';
+        if (teamABox) teamABox.classList.remove('active-turn');
+        if (teamBBox) teamBBox.classList.remove('active-turn');
         showPostDraftAnalysis();
         return;
     } else {
-        postDraftModal.classList.add('hidden');
+        if (postDraftModal) postDraftModal.classList.add('hidden');
     }
 
     const turn = getCurrentTurn();
@@ -330,40 +652,52 @@ function updateTurnStatusUI() {
 
     const actionUpper = turn.action.toUpperCase();
     const spectatorSubtext = window.currentRoomMode === 'auto_sim' ? '(Spectating AI)' : `(You: Team ${window.myAssignedTeam})`;
-    turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper}`;
-    phaseBannerText.innerText = `${turn.phase} ${spectatorSubtext}`;
+    
+    if (turnBannerText) turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper}`;
+    if (phaseBannerText) phaseBannerText.innerText = `${turn.phase} ${spectatorSubtext}`;
 
-    if (turn.team === 'A') {
-        teamABox.classList.add('active-turn');
-        teamBBox.classList.remove('active-turn');
-    } else {
-        teamBBox.classList.add('active-turn');
-        teamABox.classList.remove('active-turn');
+    if (turnAnnouncer) {
+        turnAnnouncer.className = `turn-announcer-center ${turn.action === 'ban' ? 'action-ban' : 'action-pick'}`;
+    }
+
+    if (teamABox && teamBBox) {
+        if (turn.team === 'A') {
+            teamABox.classList.add('active-turn');
+            teamBBox.classList.remove('active-turn');
+        } else {
+            teamBBox.classList.add('active-turn');
+            teamABox.classList.remove('active-turn');
+        }
     }
 }
 
 function showPostDraftAnalysis() {
+    if (!postDraftModal) return;
     const resultA = evaluateTeamDraft(draftState.picks.A);
     const resultB = evaluateTeamDraft(draftState.picks.B);
 
-    scoreTeamA.innerText = resultA.score;
-    scoreTeamB.innerText = resultB.score;
+    if (scoreTeamA) scoreTeamA.innerText = resultA.score;
+    if (scoreTeamB) scoreTeamB.innerText = resultB.score;
 
-    breakdownTeamA.innerHTML = resultA.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
-    breakdownTeamB.innerHTML = resultB.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
+    if (breakdownTeamA) breakdownTeamA.innerHTML = resultA.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
+    if (breakdownTeamB) breakdownTeamB.innerHTML = resultB.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
 
-    compPicksA.innerText = draftState.picks.A.map(h => h.name).join(', ') || 'None';
-    compPicksB.innerText = draftState.picks.B.map(h => h.name).join(', ') || 'None';
-    compBansA.innerText = draftState.bans.A.map(h => h.name).join(', ') || 'None';
-    compBansB.innerText = draftState.bans.B.map(h => h.name).join(', ') || 'None';
+    if (compPicksA) compPicksA.innerText = draftState.picks.A.map(h => h.name).join(', ') || 'None';
+    if (compPicksB) compPicksB.innerText = draftState.picks.B.map(h => h.name).join(', ') || 'None';
+    if (compBansA) compBansA.innerText = draftState.bans.A.map(h => h.name).join(', ') || 'None';
+    if (compBansB) compBansB.innerText = draftState.bans.B.map(h => h.name).join(', ') || 'None';
 
-    compLanesA.innerText = resultA.coveredLanes.join(', ') || 'None';
-    compLanesB.innerText = resultB.coveredLanes.join(', ') || 'None';
+    if (compLanesA) compLanesA.innerText = resultA.coveredLanes.join(', ') || 'None';
+    if (compLanesB) compLanesB.innerText = resultB.coveredLanes.join(', ') || 'None';
 
     postDraftModal.classList.remove('hidden');
 }
 
-btnCloseModal.addEventListener('click', () => postDraftModal.classList.add('hidden'));
+if (btnCloseModal) {
+    btnCloseModal.addEventListener('click', () => {
+        if (postDraftModal) postDraftModal.classList.add('hidden');
+    });
+}
 
 function updateUI() {
     renderTimeline();
@@ -373,35 +707,18 @@ function updateUI() {
     updateTurnStatusUI();
 }
 
-heroSearch.addEventListener('input', (e) => {
-    currentSearchQuery = e.target.value;
-    renderHeroGrid();
-});
+if (heroSearch) {
+    heroSearch.addEventListener('input', (e) => {
+        currentSearchQuery = e.target.value;
+        renderHeroGrid();
+    });
+}
 
 laneButtons.forEach(btn => {
     btn.addEventListener('click', () => {
         laneButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        currentLaneFilter = btn.dataset.lane;
+        currentLaneFilter = btn.dataset.lane.toUpperCase();
         renderHeroGrid();
     });
 });
-
-function showDraftScreen(roomId, mode) {
-    roomDisplayTag.innerText = `ROOM: ${roomId}`;
-    setupScreen.classList.add('hidden');
-    draftScreen.classList.remove('hidden');
-
-    if (mode === 'auto_sim') {
-        simControlBar.classList.remove('hidden');
-    } else {
-        simControlBar.classList.add('hidden');
-    }
-
-    updateUI();
-}
-
-function showSetupScreen() {
-    draftScreen.classList.add('hidden');
-    setupScreen.classList.remove('hidden');
-}
