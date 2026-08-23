@@ -211,18 +211,24 @@
 
             <!-- Hero Selector Section -->
             <div class="hero-selector-section">
-                <div class="filter-controls">
-                    <div class="search-wrap">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="hero-search" placeholder="Filter heroes..." autocomplete="off">
+                <!-- FILTER CONTROLS BAR -->
+                <div class="filter-controls-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+                    <div class="search-and-mode-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                        <div class="search-wrap" style="flex: 1; min-width: 200px;">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="hero-search" placeholder="Filter heroes by name..." autocomplete="off">
+                        </div>
+                        
+                        <!-- MODE TOGGLE SWITCH -->
+                        <div class="filter-mode-switch" style="display: inline-flex; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 3px; gap: 4px;">
+                            <button type="button" class="btn btn-sm active" id="modeLaneBtn" style="font-weight: 700;">Map Lanes</button>
+                            <button type="button" class="btn btn-sm btn-secondary" id="modeRoleBtn" style="font-weight: 700;">Hero Classes</button>
+                        </div>
                     </div>
-                    <div class="lane-filter-tabs">
-                        <button class="lane-btn active" data-lane="ALL">ALL</button>
-                        <button class="lane-btn" data-lane="EXP">EXP</button>
-                        <button class="lane-btn" data-lane="JUNGLE">JUNGLE</button>
-                        <button class="lane-btn" data-lane="MID">MID</button>
-                        <button class="lane-btn" data-lane="GOLD">GOLD</button>
-                        <button class="lane-btn" data-lane="ROAM">ROAM</button>
+
+                    <!-- DYNAMIC FILTER BUTTONS -->
+                    <div class="lane-filter-tabs" id="filterPillsContainer" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <!-- Injected dynamically by main.js based on selected mode -->
                     </div>
                 </div>
 
@@ -315,38 +321,31 @@
                 </div>
             </div>
         </div>
-    </div>
 
-
-<!-- Opponent Disconnected Countdown Modal -->
-<div id="disconnect-modal" class="modal-overlay hidden">
-    <div class="modal-card modal-sm">
-        <div class="modal-header">
-            <h2 style="color: var(--red-side);">⚠️ Opponent Disconnected</h2>
+        <!-- Opponent Disconnected Countdown Modal -->
+        <div id="disconnect-modal" class="modal-overlay hidden">
+            <div class="modal-card modal-sm">
+                <div class="modal-header">
+                    <h2 style="color: var(--red-side, #ef4444);">⚠️ Opponent Disconnected</h2>
+                </div>
+                <p class="disclaimer-text" id="disconnect-modal-text">
+                    Your opponent left the room. Waiting for them to reconnect...
+                </p>
+                <div class="countdown-display" style="font-family: var(--font-heading, 'Rajdhani', sans-serif); font-size: 3rem; font-weight: 700; color: var(--gold-accent, #f59e0b); margin: 15px 0; text-align: center;">
+                    <span id="disconnect-countdown">30</span>s
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-muted, #94a3b8); margin-bottom: 20px; text-align: center;">
+                    The room will automatically close if the opponent does not return.
+                </p>
+                <button id="btn-leave-now" class="btn btn-outline-danger btn-large">Leave Room Now</button>
+            </div>
         </div>
-        <p class="disclaimer-text" id="disconnect-modal-text">
-            Your opponent left the room. Waiting for them to reconnect...
-        </p>
-        <div class="countdown-display" style="font-family: var(--font-heading); font-size: 3rem; font-weight: 700; color: var(--gold-accent); margin: 15px 0;">
-            <span id="disconnect-countdown">30</span>s
-        </div>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;">
-            The room will automatically close if the opponent does not return.
-        </p>
-        <button id="btn-leave-now" class="btn btn-outline-danger btn-large">Leave Room Now</button>
     </div>
-</div>
-
-
 
     <!-- Script Dependencies -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/hero-data.js"></script>
     <script src="/js/draft-engine.js"></script>
     <script src="/js/main.js"></script>
-
-    
-
-
 </body>
 </html>

@@ -1,552 +1,363 @@
 // =========================================================================
-// MAIN CLIENT INTERACTIVITY, DISCONNECT COUNTDOWN & REAL-TIME SYNC
+// APPLICATION CLIENT CONTROLLER (main.js)
 // =========================================================================
 
-const socket = io({
-    reconnection: true,
-    reconnectionAttempts: 20,
-    reconnectionDelay: 1000
-});
+const socket = io();
 
-function getOrCreatePlayerToken() {
-    let token = sessionStorage.getItem('mlbb_player_token');
-    if (!token) {
-        token = 'PLR-' + Math.random().toString(36).substring(2, 9).toUpperCase();
-        sessionStorage.setItem('mlbb_player_token', token);
-    }
-    return token;
+// Local Player Token (Unique per browser tab/session)
+let clientPlayerToken = sessionStorage.getItem('mlbb_player_token');
+if (!clientPlayerToken) {
+    clientPlayerToken = 'usr_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    sessionStorage.setItem('mlbb_player_token', clientPlayerToken);
 }
 
-const myPlayerToken = getOrCreatePlayerToken();
-
-// Screen Elements
-const connectionStatus = document.getElementById('connection-status');
-const setupScreen = document.getElementById('setup-screen');
-const lobbyScreen = document.getElementById('lobby-screen');
-const draftScreen = document.getElementById('draft-screen');
-
-// Setup Controls
-const btnModeAi = document.getElementById('btn-mode-ai');
-const btnModeSim = document.getElementById('btn-mode-sim');
-const btnModeCreate = document.getElementById('btn-mode-create');
-const btnModeJoin = document.getElementById('btn-mode-join');
-const joinInputGroup = document.getElementById('join-input-group');
-const roomIdInput = document.getElementById('room-id-input');
-const btnEnterRoom = document.getElementById('btn-enter-room');
-
-// Lobby Staging Controls
-const lobbyRoomCode = document.getElementById('lobby-room-code');
-const btnCopyCode = document.getElementById('btn-copy-code');
-const copyToast = document.getElementById('copy-toast');
-const lobbyPlayerAName = document.getElementById('lobby-player-a-name');
-const lobbyPlayerAStatus = document.getElementById('lobby-player-a-status');
-const lobbyPlayerBName = document.getElementById('lobby-player-b-name');
-const lobbyPlayerBStatus = document.getElementById('lobby-player-b-status');
-const btnToggleReady = document.getElementById('btn-toggle-ready');
-const readyBtnText = document.getElementById('ready-btn-text');
-const btnLobbyLeave = document.getElementById('btn-lobby-leave');
-
-// Disconnect Modal Controls
-const disconnectModal = document.getElementById('disconnect-modal');
-const disconnectCountdown = document.getElementById('disconnect-countdown');
-const disconnectModalText = document.getElementById('disconnect-modal-text');
-const btnLeaveNow = document.getElementById('btn-leave-now');
+// Client View State
+let currentRoomId = null;
+let currentAssignedTeam = 'SPEC'; // 'A' | 'B' | 'SPEC'
+window.currentRoomMode = 'vs_ai'; // 'vs_ai' | 'auto_sim' | 'pvp'
+let currentDraftState = null;
+let isSubmittingAction = false;
 let disconnectInterval = null;
 
-// Draft Board Controls
-const simControlBar = document.getElementById('sim-control-bar');
-const btnSimStep = document.getElementById('btn-sim-step');
-const btnSimAuto = document.getElementById('btn-sim-auto');
-const btnSimPause = document.getElementById('btn-sim-pause');
-const btnSimReset = document.getElementById('btn-sim-reset');
-const btnManualReset = document.getElementById('btn-manual-reset');
-const btnLeaveRoom = document.getElementById('btn-leave-room');
-
-const heroGrid = document.getElementById('hero-grid');
-const heroSearch = document.getElementById('hero-search');
-const laneButtons = document.querySelectorAll('.lane-btn');
-
-const roomDisplayTag = document.getElementById('room-display-tag');
-const turnBannerText = document.getElementById('turn-banner-text');
-const phaseBannerText = document.getElementById('phase-banner-text');
-const teamABox = document.getElementById('team-a-box');
-const teamBBox = document.getElementById('team-b-box');
-const blueBans = document.getElementById('blue-bans');
-const redBans = document.getElementById('red-bans');
-const bluePicks = document.getElementById('blue-picks');
-const redPicks = document.getElementById('red-picks');
-const timelineStrip = document.getElementById('timeline-strip');
-const draftLogList = document.getElementById('draft-log-list');
-
-// Reset Approval Controls
-const resetConfirmModal = document.getElementById('reset-confirm-modal');
-const btnAcceptReset = document.getElementById('btn-accept-reset');
-const btnDeclineReset = document.getElementById('btn-decline-reset');
-const resetStatusBanner = document.getElementById('reset-status-banner');
-
-// Post-Draft Modal Controls
-const postDraftModal = document.getElementById('post-draft-modal');
-const btnCloseModal = document.getElementById('btn-close-modal');
-const scoreTeamA = document.getElementById('score-team-a');
-const scoreTeamB = document.getElementById('score-team-b');
-const breakdownTeamA = document.getElementById('breakdown-team-a');
-const breakdownTeamB = document.getElementById('breakdown-team-b');
-const compPicksA = document.getElementById('comp-picks-a');
-const compPicksB = document.getElementById('comp-picks-b');
-const compBansA = document.getElementById('comp-bans-a');
-const compBansB = document.getElementById('comp-bans-b');
-const compLanesA = document.getElementById('comp-lanes-a');
-const compLanesB = document.getElementById('comp-lanes-b');
-
-let currentMode = 'vs_ai';
+// Filter State
+let currentFilterMode = 'lane'; // 'lane' | 'role'
+let currentCategoryFilter = 'ALL';
 let currentSearchQuery = '';
-let currentLaneFilter = 'ALL';
-let isSubmittingAction = false;
-window.myAssignedTeam = null;
-window.currentRoomId = null;
-window.currentRoomMode = null;
+
+const LANE_FILTERS = [
+    { label: 'ALL', key: 'ALL' },
+    { label: 'EXP', key: 'EXP' },
+    { label: 'JUNGLE', key: 'Jungle' },
+    { label: 'MID', key: 'Mid' },
+    { label: 'GOLD', key: 'Gold' },
+    { label: 'ROAM', key: 'Roam' }
+];
+
+const CLASS_FILTERS = [
+    { label: 'ALL', key: 'ALL' },
+    { label: 'TANK', key: 'Tank' },
+    { label: 'FIGHTER', key: 'Fighter' },
+    { label: 'ASSASSIN', key: 'Assassin' },
+    { label: 'MAGE', key: 'Mage' },
+    { label: 'MARKSMAN', key: 'Marksman' },
+    { label: 'SUPPORT', key: 'Support' }
+];
+
+// DOM References
+let setupScreen, lobbyScreen, draftScreen;
+let connectionStatus, connDot, connLabel;
+let btnModeAi, btnModeSim, btnModeCreate, btnModeJoin, joinInputGroup, roomIdInput, btnEnterRoom;
+let lobbyRoomCode, btnCopyCode, copyToast, lobbyPlayerAName, lobbyPlayerBName, lobbyPlayerAStatus, lobbyPlayerBStatus, btnLobbyLeave, btnToggleReady, readyBtnText;
+let simControlBar, btnSimStep, btnSimAuto, btnSimPause, btnSimReset;
+let blueBans, redBans, bluePicks, redPicks, roomDisplayTag, turnBannerText, phaseBannerText, resetStatusBanner;
+let timelineStrip, recommendationPanel, recTitleText, recChipsContainer;
+let heroSearchInput, filterPillsContainer, modeLaneBtn, modeRoleBtn, heroGrid;
+let draftLogList, btnManualReset, btnLeaveRoom;
+let resetConfirmModal, resetRequestText, btnAcceptReset, btnDeclineReset;
+let postDraftModal, scoreTeamA, scoreTeamB, breakdownTeamA, breakdownTeamB, compPicksA, compBansA, compLanesA, compPicksB, compBansB, compLanesB, btnCloseModal;
+let disconnectModal, disconnectCountdown, btnLeaveNow;
 
 // =========================================================================
-// HERO PORTRAIT & FALLBACK HELPER
+// AVATAR GENERATION (Real Image Resolvers)
 // =========================================================================
 
-/**
- * Creates an image element with a robust fallback to initials if the portrait fails to load.
- */
-function createHeroAvatarHTML(hero, extraClass = '') {
+// Special alias dictionary for heroes whose repo image keys differ from default IDs
+const HERO_IMAGE_ALIASES = {
+    "popol_and_kupa": "popol-and-kupa",
+    "x_borg": "x.borg",
+    "yi_sun_shin": "yi-sun-shin",
+    "yu_zhong": "yu-zhong",
+    "lapu_lapu": "lapu-lapu",
+    "luo_yi": "luo-yi",
+    "change": "chang-e",
+    "sora": "cici",
+    "zetian": "zhuxin"
+};
+
+function createHeroAvatarHTML(hero, customClass = '') {
     if (!hero) return '';
-    const initials = hero.name.substring(0, 2).toUpperCase();
-    const imgSrc = hero.image || '';
+    const name = hero.name || 'Hero';
+    
+    // Clean name for URL encoding (replace apostrophe with %27 for Chang'e)
+    const cleanWikiName = name.replace(/\s+/g, '_').replace(/'/g, '%27');
+    
+    const localSrc = hero.image || `/assets/heroes/${hero.id}.png`;
+    const aliasKey = HERO_IMAGE_ALIASES[hero.id] || hero.id.replace(/_/g, '-');
+    
+    // Direct working CDN mirrors
+    const githubMirror = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/${aliasKey}.png`;
+    const wikiMirror = `https://mobile-legends.fandom.com/wiki/Special:FilePath/${cleanWikiName}.png`;
+    const fallbackDirect = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/change.png`;
 
     return `
-        <div class="hero-avatar-wrap ${extraClass}">
-            <img class="hero-avatar-img" 
-                 src="${imgSrc}" 
-                 alt="${hero.name}" 
-                 loading="lazy" 
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-            <div class="avatar-fallback" style="display: none;">${initials}</div>
+        <div class="hero-avatar-wrapper ${customClass}">
+            <img class="hero-img" 
+                 src="${localSrc}" 
+                 alt="${name}" 
+                 loading="lazy"
+                 onerror="
+                    if (!this.dataset.triedGithub) {
+                        this.dataset.triedGithub = 'true';
+                        this.src = '${githubMirror}';
+                    } else if (!this.dataset.triedWiki) {
+                        this.dataset.triedWiki = 'true';
+                        this.src = '${wikiMirror}';
+                    } else if (!this.dataset.triedDirect) {
+                        this.dataset.triedDirect = 'true';
+                        this.src = '${fallbackDirect}';
+                    }
+                 " />
         </div>
     `;
 }
+// =========================================================================
+// INITIALIZATION
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Screens
+    setupScreen = document.getElementById('setup-screen');
+    lobbyScreen = document.getElementById('lobby-screen');
+    draftScreen = document.getElementById('draft-screen');
 
-function findHeroById(id) {
-    return HERO_DATASET.find(h => h.id === id) || { id, name: id, lanes: [] };
+    // Status
+    connectionStatus = document.getElementById('connection-status');
+    connDot = connectionStatus?.querySelector('.status-dot');
+    connLabel = connectionStatus?.querySelector('.status-label');
+
+    // Setup screen elements
+    btnModeAi = document.getElementById('btn-mode-ai');
+    btnModeSim = document.getElementById('btn-mode-sim');
+    btnModeCreate = document.getElementById('btn-mode-create');
+    btnModeJoin = document.getElementById('btn-mode-join');
+    joinInputGroup = document.getElementById('join-input-group');
+    roomIdInput = document.getElementById('room-id-input');
+    btnEnterRoom = document.getElementById('btn-enter-room');
+
+    // Lobby screen elements
+    lobbyRoomCode = document.getElementById('lobby-room-code');
+    btnCopyCode = document.getElementById('btn-copy-code');
+    copyToast = document.getElementById('copy-toast');
+    lobbyPlayerAName = document.getElementById('lobby-player-a-name');
+    lobbyPlayerBName = document.getElementById('lobby-player-b-name');
+    lobbyPlayerAStatus = document.getElementById('lobby-player-a-status');
+    lobbyPlayerBStatus = document.getElementById('lobby-player-b-status');
+    btnLobbyLeave = document.getElementById('btn-lobby-leave');
+    btnToggleReady = document.getElementById('btn-toggle-ready');
+    readyBtnText = document.getElementById('ready-btn-text');
+
+    // Draft screen elements
+    simControlBar = document.getElementById('sim-control-bar');
+    btnSimStep = document.getElementById('btn-sim-step');
+    btnSimAuto = document.getElementById('btn-sim-auto');
+    btnSimPause = document.getElementById('btn-sim-pause');
+    btnSimReset = document.getElementById('btn-sim-reset');
+
+    blueBans = document.getElementById('blue-bans');
+    redBans = document.getElementById('red-bans');
+    bluePicks = document.getElementById('blue-picks');
+    redPicks = document.getElementById('red-picks');
+    roomDisplayTag = document.getElementById('room-display-tag');
+    turnBannerText = document.getElementById('turn-banner-text');
+    phaseBannerText = document.getElementById('phase-banner-text');
+    resetStatusBanner = document.getElementById('reset-status-banner');
+
+    timelineStrip = document.getElementById('timeline-strip');
+    recommendationPanel = document.getElementById('recommendation-panel');
+    recTitleText = document.getElementById('rec-title-text');
+    recChipsContainer = document.getElementById('rec-chips-container');
+
+    // Filters & Grid
+    heroSearchInput = document.getElementById('hero-search');
+    filterPillsContainer = document.getElementById('filterPillsContainer');
+    modeLaneBtn = document.getElementById('modeLaneBtn');
+    modeRoleBtn = document.getElementById('modeRoleBtn');
+    heroGrid = document.getElementById('hero-grid');
+
+    // Bottom Tools
+    draftLogList = document.getElementById('draft-log-list');
+    btnManualReset = document.getElementById('btn-manual-reset');
+    btnLeaveRoom = document.getElementById('btn-leave-room');
+
+    // Modals
+    resetConfirmModal = document.getElementById('reset-confirm-modal');
+    resetRequestText = document.getElementById('reset-request-text');
+    btnAcceptReset = document.getElementById('btn-accept-reset');
+    btnDeclineReset = document.getElementById('btn-decline-reset');
+
+    postDraftModal = document.getElementById('post-draft-modal');
+    scoreTeamA = document.getElementById('score-team-a');
+    scoreTeamB = document.getElementById('score-team-b');
+    breakdownTeamA = document.getElementById('breakdown-team-a');
+    breakdownTeamB = document.getElementById('breakdown-team-b');
+    compPicksA = document.getElementById('comp-picks-a');
+    compBansA = document.getElementById('comp-bans-a');
+    compLanesA = document.getElementById('comp-lanes-a');
+    compPicksB = document.getElementById('comp-picks-b');
+    compBansB = document.getElementById('comp-bans-b');
+    compLanesB = document.getElementById('comp-lanes-b');
+    btnCloseModal = document.getElementById('btn-close-modal');
+
+    disconnectModal = document.getElementById('disconnect-modal');
+    disconnectCountdown = document.getElementById('disconnect-countdown');
+    btnLeaveNow = document.getElementById('btn-leave-now');
+
+    initSetupListeners();
+    initDraftListeners();
+    initDualFilterSystem();
+    buildTimelineTrack();
+    renderFilterPills();
+    renderHeroGrid();
+});
+
+// =========================================================================
+// SCREEN SWITCHING
+// =========================================================================
+function showScreen(screenId) {
+    [setupScreen, lobbyScreen, draftScreen].forEach(s => {
+        if (s) s.classList.add('hidden');
+    });
+    const target = document.getElementById(screenId);
+    if (target) {
+        target.classList.remove('hidden');
+        target.classList.add('active');
+    }
 }
 
 // =========================================================================
-// SOCKET CONNECTION & LIFECYCLE
+// SETUP SCREEN & MODE SELECTORS
 // =========================================================================
+let selectedSetupMode = 'vs_ai';
 
-socket.on('connect', () => {
-    if (connectionStatus) {
-        connectionStatus.className = 'status-badge connected';
-        const label = connectionStatus.querySelector('.status-label');
-        if (label) label.innerText = 'Online';
+function initSetupListeners() {
+    const modeCards = [btnModeAi, btnModeSim, btnModeCreate, btnModeJoin];
+
+    function setSetupMode(mode, activeCard) {
+        selectedSetupMode = mode;
+        modeCards.forEach(c => c && c.classList.remove('active'));
+        if (activeCard) activeCard.classList.add('active');
+
+        if (mode === 'join_pvp') {
+            joinInputGroup?.classList.remove('hidden');
+            roomIdInput?.focus();
+        } else {
+            joinInputGroup?.classList.add('hidden');
+        }
     }
 
-    const savedRoomId = sessionStorage.getItem('mlbb_active_room');
-    if (savedRoomId && !window.currentRoomId) {
-        socket.emit('join_room', {
-            targetRoomId: savedRoomId,
-            playerToken: myPlayerToken
+    btnModeAi?.addEventListener('click', () => setSetupMode('vs_ai', btnModeAi));
+    btnModeSim?.addEventListener('click', () => setSetupMode('auto_sim', btnModeSim));
+    btnModeCreate?.addEventListener('click', () => setSetupMode('create_pvp', btnModeCreate));
+    btnModeJoin?.addEventListener('click', () => setSetupMode('join_pvp', btnModeJoin));
+
+    btnEnterRoom?.addEventListener('click', () => {
+        if (selectedSetupMode === 'vs_ai') {
+            createRoom('vs_ai');
+        } else if (selectedSetupMode === 'auto_sim') {
+            createRoom('auto_sim');
+        } else if (selectedSetupMode === 'create_pvp') {
+            createRoom('pvp');
+        } else if (selectedSetupMode === 'join_pvp') {
+            const targetCode = roomIdInput.value.trim().toUpperCase();
+            if (targetCode.length > 0) {
+                joinRoom(targetCode);
+            } else {
+                alert('Please enter a 6-character room code.');
+            }
+        }
+    });
+}
+
+function createRoom(mode) {
+    window.currentRoomMode = mode;
+    socket.emit('create_room', { mode: mode, playerToken: clientPlayerToken });
+}
+
+function joinRoom(roomId) {
+    socket.emit('join_room', { targetRoomId: roomId, playerToken: clientPlayerToken });
+}
+
+// =========================================================================
+// DUAL MODE FILTER LOGIC
+// =========================================================================
+function initDualFilterSystem() {
+    if (modeLaneBtn && modeRoleBtn) {
+        modeLaneBtn.addEventListener('click', () => {
+            if (currentFilterMode === 'lane') return;
+            currentFilterMode = 'lane';
+            currentCategoryFilter = 'ALL';
+            modeLaneBtn.classList.remove('btn-secondary');
+            modeLaneBtn.classList.add('active');
+            modeRoleBtn.classList.add('btn-secondary');
+            modeRoleBtn.classList.remove('active');
+            renderFilterPills();
+            renderHeroGrid();
+        });
+
+        modeRoleBtn.addEventListener('click', () => {
+            if (currentFilterMode === 'role') return;
+            currentFilterMode = 'role';
+            currentCategoryFilter = 'ALL';
+            modeRoleBtn.classList.remove('btn-secondary');
+            modeRoleBtn.classList.add('active');
+            modeLaneBtn.classList.add('btn-secondary');
+            modeLaneBtn.classList.remove('active');
+            renderFilterPills();
+            renderHeroGrid();
         });
     }
-});
 
-socket.on('disconnect', () => {
-    if (connectionStatus) {
-        connectionStatus.className = 'status-badge disconnected';
-        const label = connectionStatus.querySelector('.status-label');
-        if (label) label.innerText = 'Reconnecting...';
-    }
-});
-
-socket.on('player_disconnected', ({ disconnectedTeam, timeoutSeconds }) => {
-    if (disconnectInterval) clearInterval(disconnectInterval);
-
-    let timeLeft = timeoutSeconds || 30;
-    disconnectCountdown.innerText = timeLeft;
-    disconnectModalText.innerText = `Opponent (Team ${disconnectedTeam}) disconnected. Waiting for them to return...`;
-    disconnectModal.classList.remove('hidden');
-
-    disconnectInterval = setInterval(() => {
-        timeLeft--;
-        disconnectCountdown.innerText = timeLeft;
-        if (timeLeft <= 0) clearInterval(disconnectInterval);
-    }, 1000);
-});
-
-socket.on('player_reconnected', () => {
-    if (disconnectInterval) clearInterval(disconnectInterval);
-    disconnectModal.classList.add('hidden');
-});
-
-socket.on('room_dismissed', ({ message }) => {
-    if (disconnectInterval) clearInterval(disconnectInterval);
-    disconnectModal.classList.add('hidden');
-    alert(message);
-    sessionStorage.removeItem('mlbb_active_room');
-    location.reload();
-});
-
-socket.on('draft_updated', ({ draftState: serverState, mode, status, players, isReset }) => {
-    if (!isReset && typeof draftState !== 'undefined' && draftState && draftState.version !== undefined && serverState.version !== undefined) {
-        if (serverState.version < draftState.version) return;
-    }
-
-    if (mode) window.currentRoomMode = mode;
-    draftState = serverState;
-    isSubmittingAction = false;
-
-    if (window.currentRoomMode === 'pvp' && !draftState.started) {
-        showLobbyScreen(window.currentRoomId, players);
-    } else {
-        showDraftScreen(window.currentRoomId, window.currentRoomMode);
-        updateUI();
-    }
-});
-
-socket.on('draft_error', (data) => {
-    isSubmittingAction = false;
-    alert(`Action Error: ${data.message}`);
-});
-
-socket.on('room_error', (data) => {
-    alert(data.message);
-    sessionStorage.removeItem('mlbb_active_room');
-    showSetupScreen();
-});
-
-// =========================================================================
-// SCREEN ROUTING & LOBBY MANAGEMENT
-// =========================================================================
-
-function showSetupScreen() {
-    draftScreen.classList.add('hidden');
-    lobbyScreen.classList.add('hidden');
-    setupScreen.classList.remove('hidden');
-}
-
-function showLobbyScreen(roomId, players) {
-    setupScreen.classList.add('hidden');
-    draftScreen.classList.add('hidden');
-    lobbyScreen.classList.remove('hidden');
-
-    lobbyRoomCode.innerText = roomId;
-
-    const myTeam = window.myAssignedTeam;
-    const playerA = players && players.A;
-    const playerB = players && players.B;
-
-    lobbyPlayerAName.innerText = myTeam === 'A' ? 'You (Team A)' : 'Opponent (Team A)';
-    if (playerA && playerA.connected) {
-        lobbyPlayerAStatus.innerText = playerA.ready ? 'READY' : 'WAITING';
-        lobbyPlayerAStatus.className = `slot-status-badge ${playerA.ready ? 'ready' : 'waiting'}`;
-    } else {
-        lobbyPlayerAStatus.innerText = 'OFFLINE';
-        lobbyPlayerAStatus.className = 'slot-status-badge waiting';
-    }
-
-    if (playerB && playerB.connected) {
-        lobbyPlayerBName.innerText = myTeam === 'B' ? 'You (Team B)' : 'Opponent (Team B)';
-        lobbyPlayerBStatus.innerText = playerB.ready ? 'READY' : 'WAITING';
-        lobbyPlayerBStatus.className = `slot-status-badge ${playerB.ready ? 'ready' : 'waiting'}`;
-    } else {
-        lobbyPlayerBName.innerText = 'Waiting for Player B...';
-        lobbyPlayerBStatus.innerText = 'WAITING';
-        lobbyPlayerBStatus.className = 'slot-status-badge waiting';
-    }
-
-    const myData = myTeam === 'A' ? playerA : playerB;
-    if (myData && myData.ready) {
-        btnToggleReady.className = 'btn btn-secondary btn-large';
-        readyBtnText.innerText = 'CANCEL READY';
-    } else {
-        btnToggleReady.className = 'btn btn-gold btn-large';
-        readyBtnText.innerText = 'READY UP';
-    }
-}
-
-function showDraftScreen(roomId, mode) {
-    if (roomDisplayTag) roomDisplayTag.innerText = `ROOM: ${roomId}`;
-    setupScreen.classList.add('hidden');
-    lobbyScreen.classList.add('hidden');
-    draftScreen.classList.remove('hidden');
-
-    if (simControlBar) {
-        if (mode === 'auto_sim') {
-            simControlBar.classList.remove('hidden');
-        } else {
-            simControlBar.classList.add('hidden');
-        }
-    }
-
-    if (btnManualReset) {
-        if (mode === 'auto_sim') {
-            btnManualReset.classList.add('hidden');
-        } else {
-            btnManualReset.classList.remove('hidden');
-        }
-    }
-}
-
-btnToggleReady.addEventListener('click', () => socket.emit('toggle_ready'));
-
-btnCopyCode.addEventListener('click', () => {
-    const code = lobbyRoomCode.innerText;
-    navigator.clipboard.writeText(code).then(() => {
-        copyToast.classList.remove('hidden');
-        setTimeout(() => copyToast.classList.add('hidden'), 2000);
-    });
-});
-
-btnLobbyLeave.addEventListener('click', () => {
-    sessionStorage.removeItem('mlbb_active_room');
-    location.reload();
-});
-
-btnLeaveRoom.addEventListener('click', () => {
-    sessionStorage.removeItem('mlbb_active_room');
-    location.reload();
-});
-
-btnLeaveNow.addEventListener('click', () => {
-    if (disconnectInterval) clearInterval(disconnectInterval);
-    sessionStorage.removeItem('mlbb_active_room');
-    location.reload();
-});
-
-// =========================================================================
-// MODE SELECTION & ENTRY
-// =========================================================================
-
-function setActiveModeCard(selectedBtn) {
-    [btnModeAi, btnModeSim, btnModeCreate, btnModeJoin].forEach(btn => {
-        if (btn) btn.classList.remove('active');
-    });
-    if (selectedBtn) selectedBtn.classList.add('active');
-}
-
-btnModeAi.addEventListener('click', () => {
-    currentMode = 'vs_ai';
-    setActiveModeCard(btnModeAi);
-    joinInputGroup.classList.add('hidden');
-});
-
-btnModeSim.addEventListener('click', () => {
-    currentMode = 'auto_sim';
-    setActiveModeCard(btnModeSim);
-    joinInputGroup.classList.add('hidden');
-});
-
-btnModeCreate.addEventListener('click', () => {
-    currentMode = 'create';
-    setActiveModeCard(btnModeCreate);
-    joinInputGroup.classList.add('hidden');
-});
-
-btnModeJoin.addEventListener('click', () => {
-    currentMode = 'join';
-    setActiveModeCard(btnModeJoin);
-    joinInputGroup.classList.remove('hidden');
-    roomIdInput.focus();
-});
-
-btnEnterRoom.addEventListener('click', () => {
-    if (currentMode === 'vs_ai' || currentMode === 'auto_sim') {
-        socket.emit('create_room', { playerToken: myPlayerToken, mode: currentMode });
-    } else if (currentMode === 'create') {
-        socket.emit('create_room', { playerToken: myPlayerToken, mode: 'pvp' });
-    } else {
-        const inputCode = roomIdInput.value.trim().toUpperCase();
-        if (!inputCode) {
-            alert('Please enter a 6-character room code.');
-            return;
-        }
-        socket.emit('join_room', { targetRoomId: inputCode, playerToken: myPlayerToken });
-    }
-});
-
-socket.on('room_created', (data) => {
-    window.currentRoomId = data.roomId;
-    window.myAssignedTeam = data.yourTeam;
-    window.currentRoomMode = data.mode;
-    draftState = data.draftState;
-
-    sessionStorage.setItem('mlbb_active_room', data.roomId);
-
-    if (data.mode === 'pvp') {
-        showLobbyScreen(data.roomId, data.players);
-    } else {
-        showDraftScreen(data.roomId, data.mode);
-        updateUI();
-    }
-});
-
-socket.on('room_joined', (data) => {
-    window.currentRoomId = data.roomId;
-    window.myAssignedTeam = data.yourTeam;
-    window.currentRoomMode = data.mode;
-    draftState = data.draftState;
-
-    sessionStorage.setItem('mlbb_active_room', data.roomId);
-
-    if (data.mode === 'pvp' && !data.draftState.started) {
-        showLobbyScreen(data.roomId, data.players);
-    } else {
-        showDraftScreen(data.roomId, data.mode);
-        updateUI();
-    }
-});
-
-// =========================================================================
-// RESET & SIM CONTROLS
-// =========================================================================
-
-socket.on('reset_requested', () => {
-    if (resetConfirmModal) resetConfirmModal.classList.remove('hidden');
-});
-
-socket.on('reset_status', ({ message }) => {
-    if (resetStatusBanner) {
-        resetStatusBanner.innerText = message;
-        resetStatusBanner.classList.remove('hidden');
-        setTimeout(() => {
-            if (resetStatusBanner) resetStatusBanner.classList.add('hidden');
-        }, 3500);
-    }
-});
-
-socket.on('reset_declined', ({ message }) => {
-    if (resetStatusBanner) {
-        resetStatusBanner.innerText = message;
-        resetStatusBanner.classList.remove('hidden');
-        setTimeout(() => resetStatusBanner.classList.add('hidden'), 4000);
-    }
-});
-
-if (btnAcceptReset) {
-    btnAcceptReset.addEventListener('click', () => {
-        socket.emit('respond_reset', { approved: true });
-        if (resetConfirmModal) resetConfirmModal.classList.add('hidden');
-    });
-}
-
-if (btnDeclineReset) {
-    btnDeclineReset.addEventListener('click', () => {
-        socket.emit('respond_reset', { approved: false });
-        if (resetConfirmModal) resetConfirmModal.classList.add('hidden');
-    });
-}
-
-if (btnManualReset) btnManualReset.addEventListener('click', () => socket.emit('request_reset'));
-if (btnSimReset) btnSimReset.addEventListener('click', () => socket.emit('request_reset'));
-if (btnSimStep) btnSimStep.addEventListener('click', () => socket.emit('sim_step'));
-if (btnSimAuto) btnSimAuto.addEventListener('click', () => socket.emit('sim_start_auto'));
-if (btnSimPause) btnSimPause.addEventListener('click', () => socket.emit('sim_pause_auto'));
-
-// =========================================================================
-// RENDERERS (WITH CONSISTENT HERO PRESENTATION)
-// =========================================================================
-
-function renderTimeline() {
-    if (!timelineStrip) return;
-    timelineStrip.innerHTML = '';
-    DRAFT_SEQUENCE.forEach((step, index) => {
-        const item = document.createElement('div');
-        item.className = `timeline-step team-${step.team}`;
-
-        if (index < draftState.currentTurnIndex) {
-            item.classList.add('completed');
-        } else if (index === draftState.currentTurnIndex && !draftState.isComplete) {
-            item.classList.add('active');
-        }
-
-        const actionLetter = step.action === 'ban' ? 'B' : 'P';
-        item.innerText = `${step.turn}:${actionLetter}`;
-        timelineStrip.appendChild(item);
-    });
-}
-
-function renderDraftLog() {
-    if (!draftLogList) return;
-    draftLogList.innerHTML = '';
-    draftState.draftLog.forEach(log => {
-        const heroObj = findHeroById(log.hero ? log.hero.toLowerCase() : '');
-        const li = document.createElement('li');
-        li.className = `team-${log.team}`;
-        li.innerHTML = `
-            <div class="log-item-wrap">
-                ${createHeroAvatarHTML(heroObj, 'log-avatar')}
-                <span>[Turn ${log.turn}] Team ${log.team} ${log.action.toUpperCase()}ED <strong>${log.hero}</strong></span>
-            </div>
-        `;
-        draftLogList.appendChild(li);
-    });
-    draftLogList.scrollTop = draftLogList.scrollHeight;
-}
-
-function renderRecommendations() {
-    const recContainer = document.getElementById('rec-chips-container');
-    const recTitleText = document.getElementById('rec-title-text');
-    const recPanel = document.getElementById('recommendation-panel');
-    if (!recContainer || !recPanel) return;
-
-    if (window.currentRoomMode === 'auto_sim' || draftState.isComplete) {
-        recPanel.style.display = 'none';
-        return;
-    }
-
-    const recData = getRecommendations();
-    if (recData.type === 'complete') {
-        recPanel.style.display = 'none';
-        return;
-    }
-
-    recPanel.style.display = 'block';
-    recContainer.innerHTML = '';
-
-    if (recData.type === 'ban') {
-        recTitleText.innerText = 'High Priority Ban Suggestions:';
-    } else {
-        const laneStr = recData.neededLanes.length > 0 ? recData.neededLanes.join(', ') : 'Flex Fill';
-        recTitleText.innerText = `Suggested Picks (Needs: ${laneStr}):`;
-    }
-
-    recData.list.forEach(hero => {
-        const chip = document.createElement('button');
-        chip.className = 'rec-chip';
-        chip.innerHTML = `
-            ${createHeroAvatarHTML(hero, 'rec-chip-avatar')}
-            <span>${hero.name}</span> 
-            <small>(${hero.lanes.join('/')})</small>
-        `;
-        chip.addEventListener('click', () => {
-            if (isSubmittingAction) return;
-            isSubmittingAction = true;
-            socket.emit('select_hero', { heroId: hero.id });
+    if (heroSearchInput) {
+        heroSearchInput.addEventListener('input', (e) => {
+            currentSearchQuery = e.target.value.trim();
+            renderHeroGrid();
         });
-        recContainer.appendChild(chip);
+    }
+}
+
+function renderFilterPills() {
+    if (!filterPillsContainer) return;
+    filterPillsContainer.innerHTML = '';
+
+    const filterList = currentFilterMode === 'lane' ? LANE_FILTERS : CLASS_FILTERS;
+
+    filterList.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `lane-btn ${currentCategoryFilter.toUpperCase() === item.key.toUpperCase() ? 'active' : ''}`;
+        btn.textContent = item.label;
+
+        btn.addEventListener('click', () => {
+            currentCategoryFilter = item.key;
+            renderFilterPills();
+            renderHeroGrid();
+        });
+
+        filterPillsContainer.appendChild(btn);
     });
 }
 
-// Replace renderHeroGrid in public/js/main.js with this:
 function renderHeroGrid() {
     if (!heroGrid) return;
     heroGrid.innerHTML = '';
+
     const recData = getRecommendations();
     const recommendedIds = recData.list ? recData.list.map(h => h.id) : [];
 
     const filteredHeroes = HERO_DATASET.filter(hero => {
         const matchesName = hero.name.toLowerCase().includes(currentSearchQuery.toLowerCase());
-        
-        // CASE-INSENSITIVE ROLE MATCHING
-        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
-        const matchesLane = (currentLaneFilter.toUpperCase() === 'ALL') || 
-            lanes.some(lane => lane.toUpperCase() === currentLaneFilter.toUpperCase());
-            
-        return matchesName && matchesLane;
+
+        let matchesCategory = false;
+        if (currentCategoryFilter.toUpperCase() === 'ALL') {
+            matchesCategory = true;
+        } else if (currentFilterMode === 'lane') {
+            const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+            matchesCategory = lanes.some(l => l.toUpperCase() === currentCategoryFilter.toUpperCase());
+        } else if (currentFilterMode === 'role') {
+            const classes = (typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []);
+            matchesCategory = classes.some(c => c.toUpperCase() === currentCategoryFilter.toUpperCase());
+        }
+
+        return matchesName && matchesCategory;
     });
 
     filteredHeroes.forEach(hero => {
@@ -563,15 +374,20 @@ function renderHeroGrid() {
             card.classList.add('recommended');
         }
 
-        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
-        const tagsHtml = lanes.map(l => `<span class="tag">${l}</span>`).join('');
-        const badgeHtml = isRecommended ? `<span class="rec-badge">⭐ REC</span>` : '';
+        const displayTags = (currentFilterMode === 'lane')
+            ? ((typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []))
+            : ((typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []));
+
+        const tagsHtml = displayTags.map(t => `<span class="tag-badge">${t}</span>`).join('');
+        const badgeHtml = isRecommended ? `<span class="rec-badge">REC</span>` : '';
 
         card.innerHTML = `
             ${badgeHtml}
-            ${createHeroAvatarHTML(hero, 'hero-grid-avatar')}
-            <div class="hero-name">${hero.name}</div>
-            <div class="lane-tags">${tagsHtml}</div>
+            ${createHeroAvatarHTML(hero, 'card-avatar')}
+            <div class="card-info">
+                <span class="card-name">${hero.name}</span>
+                <div class="card-tags">${tagsHtml}</div>
+            </div>
         `;
 
         if (!isSimMode && !unavailable && !draftState.isComplete) {
@@ -586,139 +402,392 @@ function renderHeroGrid() {
     });
 }
 
-function renderBans(team, bansElement) {
-    if (!bansElement) return;
-    const bans = draftState.bans[team] || [];
-    if (bans.length === 0) {
-        bansElement.innerHTML = '<span style="color: var(--text-muted); font-style: italic;">None</span>';
-        return;
-    }
-    bansElement.innerHTML = bans.map(hero => `
-        <div class="ban-chip-item">
-            ${createHeroAvatarHTML(hero, 'ban-chip-avatar')}
-            <span>${hero.name}</span>
-        </div>
-    `).join('');
+function updateTimelineUI() {
+    DRAFT_SEQUENCE.forEach((seq, idx) => {
+        const el = document.getElementById(`timelineStep_${idx}`);
+        if (!el) return;
+
+        el.classList.remove('active', 'completed');
+        if (idx < draftState.currentTurnIndex) {
+            el.classList.add('completed');
+        } else if (idx === draftState.currentTurnIndex && !draftState.isComplete && draftState.started) {
+            el.classList.add('active');
+        }
+    });
 }
 
-function renderSlots(team, picksListElement) {
-    if (!picksListElement) return;
-    picksListElement.innerHTML = '';
-    const picks = draftState.picks[team] || [];
+// =========================================================================
+// DRAFT INTERACTION & CONTROLS
+// =========================================================================
+function initDraftListeners() {
+    // Copy Room Code
+    btnCopyCode?.addEventListener('click', () => {
+        if (!currentRoomId) return;
+        navigator.clipboard.writeText(currentRoomId).then(() => {
+            copyToast?.classList.remove('hidden');
+            setTimeout(() => copyToast?.classList.add('hidden'), 2000);
+        });
+    });
+
+    // Toggle Ready in Staging
+    btnToggleReady?.addEventListener('click', () => {
+        socket.emit('toggle_ready');
+    });
+
+    // Leave Lobby / Exit Room
+    btnLobbyLeave?.addEventListener('click', () => window.location.reload());
+    btnLeaveRoom?.addEventListener('click', () => window.location.reload());
+    btnLeaveNow?.addEventListener('click', () => window.location.reload());
+
+    // Simulation Controls
+    btnSimStep?.addEventListener('click', () => socket.emit('sim_step'));
+    btnSimAuto?.addEventListener('click', () => socket.emit('sim_start_auto'));
+    btnSimPause?.addEventListener('click', () => socket.emit('sim_pause_auto'));
+    btnSimReset?.addEventListener('click', () => socket.emit('request_reset'));
+    btnManualReset?.addEventListener('click', () => socket.emit('request_reset'));
+
+    // Reset Confirmation Modal
+    btnAcceptReset?.addEventListener('click', () => {
+        socket.emit('respond_reset', { approved: true });
+        resetConfirmModal?.classList.add('hidden');
+    });
+    btnDeclineReset?.addEventListener('click', () => {
+        socket.emit('respond_reset', { approved: false });
+        resetConfirmModal?.classList.add('hidden');
+    });
+
+    // Close Post-Draft Evaluation
+    btnCloseModal?.addEventListener('click', () => {
+        postDraftModal?.classList.add('hidden');
+    });
+}
+
+// =========================================================================
+// UI SYNCHRONIZATION FROM SERVER
+// =========================================================================
+function syncStagingLobbyUI(roomPayload) {
+    const { roomId, players, status } = roomPayload;
+    if (lobbyRoomCode) lobbyRoomCode.textContent = roomId || '------';
+
+    // Player A
+    if (players?.A) {
+        lobbyPlayerAName.textContent = (currentAssignedTeam === 'A') ? 'Host (You)' : 'Player A';
+        lobbyPlayerAStatus.textContent = players.A.ready ? 'READY' : 'WAITING';
+        lobbyPlayerAStatus.className = `slot-status-badge ${players.A.ready ? 'ready' : 'waiting'}`;
+    } else {
+        lobbyPlayerAName.textContent = 'Waiting for Host...';
+        lobbyPlayerAStatus.textContent = 'WAITING';
+        lobbyPlayerAStatus.className = 'slot-status-badge waiting';
+    }
+
+    // Player B
+    if (players?.B) {
+        lobbyPlayerBName.textContent = (currentAssignedTeam === 'B') ? 'Player B (You)' : 'Opponent';
+        lobbyPlayerBStatus.textContent = players.B.ready ? 'READY' : 'WAITING';
+        lobbyPlayerBStatus.className = `slot-status-badge ${players.B.ready ? 'ready' : 'waiting'}`;
+    } else {
+        lobbyPlayerBName.textContent = 'Waiting for Player...';
+        lobbyPlayerBStatus.textContent = 'WAITING';
+        lobbyPlayerBStatus.className = 'slot-status-badge waiting';
+    }
+
+    // Ready Button
+    if (readyBtnText && players && players[currentAssignedTeam]) {
+        const isReady = players[currentAssignedTeam].ready;
+        readyBtnText.textContent = isReady ? 'CANCEL READY' : 'READY UP';
+        btnToggleReady.className = `btn btn-large ${isReady ? 'btn-secondary' : 'btn-gold'}`;
+    }
+}
+
+function syncDraftArenaUI(roomPayload) {
+    isSubmittingAction = false;
+    const { draftState: serverDraft, status, mode, players, roomId } = roomPayload;
+    draftState = serverDraft;
+
+    // Room ID
+    if (roomDisplayTag) roomDisplayTag.textContent = `ROOM: ${roomId || '------'}`;
+
+    // Show/Hide Auto-Sim Toolbar
+    if (simControlBar) {
+        if (mode === 'auto_sim') {
+            simControlBar.classList.remove('hidden');
+        } else {
+            simControlBar.classList.add('hidden');
+        }
+    }
+
+    // Render Bans
+    renderBanChips(blueBans, draftState.bans?.A || []);
+    renderBanChips(redBans, draftState.bans?.B || []);
+
+    // Render Picks
+    renderPickList(bluePicks, draftState.picks?.A || [], 'A');
+    renderPickList(redPicks, draftState.picks?.B || [], 'B');
+
+    // Update Announcer
+    updateAnnouncerHeadline(status, mode);
+
+    // Update Recommendations
+    renderRecommendations();
+
+    // Update Timeline & Hero Deck
+    updateTimelineUI();
+    renderHeroGrid();
+
+    // Update Log Ticker
+    renderActionLogs();
+
+    // Show Post-Draft Modal on Complete
+    if (draftState.isComplete) {
+        showPostDraftEvaluation();
+    }
+}
+
+function renderBanChips(container, bans) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (bans.length === 0) {
+        container.innerHTML = '<span class="empty-ban-text">None</span>';
+        return;
+    }
+
+    bans.forEach(hero => {
+        const chip = document.createElement('div');
+        chip.className = 'ban-badge';
+        chip.innerHTML = `
+            ${createHeroAvatarHTML(hero, 'ban-avatar')}
+            <span>${hero.name}</span>
+        `;
+        container.appendChild(chip);
+    });
+}
+
+function renderPickList(container, picks, teamKey) {
+    if (!container) return;
+    container.innerHTML = '';
 
     for (let i = 0; i < 5; i++) {
         const hero = picks[i];
         const li = document.createElement('li');
+
         if (hero) {
-            li.className = 'pick-slot filled';
+            const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+            li.className = 'pick-slot locked';
             li.innerHTML = `
-                ${createHeroAvatarHTML(hero, 'pick-slot-avatar')}
-                <div class="pick-slot-info">
-                    <span class="pick-slot-name">${hero.name}</span>
-                    <span class="slot-lanes">${hero.lanes.join('/')}</span>
+                ${createHeroAvatarHTML(hero, 'pick-avatar')}
+                <div class="pick-meta">
+                    <span class="hero-title">${hero.name}</span>
+                    <span class="role-desc">${lanes.join('/')}</span>
                 </div>
             `;
         } else {
-            li.className = 'pick-slot empty';
-            li.innerHTML = `<span>Pick ${i + 1} Pending...</span>`;
+            li.className = 'pick-slot pending';
+            li.innerHTML = `
+                <span class="slot-idx">Pick ${i + 1}</span>
+                <span class="slot-placeholder">Pending...</span>
+            `;
         }
-        picksListElement.appendChild(li);
+        container.appendChild(li);
     }
 }
 
-function updateTurnStatusUI() {
-    renderBans('A', blueBans);
-    renderBans('B', redBans);
+function updateAnnouncerHeadline(status, mode) {
+    if (!turnBannerText || !phaseBannerText) return;
 
-    renderSlots('A', bluePicks);
-    renderSlots('B', redPicks);
-
-    const turnAnnouncer = document.querySelector('.turn-announcer-center');
-
-    if (draftState.isComplete && draftState.currentTurnIndex >= 20) {
-        if (turnBannerText) turnBannerText.innerText = 'DRAFT COMPLETE';
-        if (phaseBannerText) phaseBannerText.innerText = 'Evaluation Ready';
-        if (turnAnnouncer) turnAnnouncer.className = 'turn-announcer-center';
-        if (teamABox) teamABox.classList.remove('active-turn');
-        if (teamBBox) teamBBox.classList.remove('active-turn');
-        showPostDraftAnalysis();
+    if (draftState.isComplete) {
+        turnBannerText.textContent = 'DRAFT COMPLETE';
+        phaseBannerText.textContent = 'Review team evaluation details';
         return;
-    } else {
-        if (postDraftModal) postDraftModal.classList.add('hidden');
     }
 
-    const turn = getCurrentTurn();
-    if (!turn) return;
+    const currentTurn = getCurrentTurn();
+    if (!currentTurn) return;
 
-    const actionUpper = turn.action.toUpperCase();
-    const spectatorSubtext = window.currentRoomMode === 'auto_sim' ? '(Spectating AI)' : `(You: Team ${window.myAssignedTeam})`;
-    
-    if (turnBannerText) turnBannerText.innerText = `Turn ${turn.turn}: Team ${turn.team} ${actionUpper}`;
-    if (phaseBannerText) phaseBannerText.innerText = `${turn.phase} ${spectatorSubtext}`;
-
-    if (turnAnnouncer) {
-        turnAnnouncer.className = `turn-announcer-center ${turn.action === 'ban' ? 'action-ban' : 'action-pick'}`;
-    }
-
-    if (teamABox && teamBBox) {
-        if (turn.team === 'A') {
-            teamABox.classList.add('active-turn');
-            teamBBox.classList.remove('active-turn');
-        } else {
-            teamBBox.classList.add('active-turn');
-            teamABox.classList.remove('active-turn');
-        }
-    }
+    const actionText = currentTurn.action.toUpperCase();
+    const teamText = `Team ${currentTurn.team}`;
+    turnBannerText.textContent = `Turn ${currentTurn.turn}: ${teamText} ${actionText}`;
+    phaseBannerText.textContent = `${currentTurn.phase} ${mode === 'pvp' ? `(You: Team ${currentAssignedTeam})` : ''}`;
 }
 
-function showPostDraftAnalysis() {
+function renderRecommendations() {
+    if (!recChipsContainer) return;
+    recChipsContainer.innerHTML = '';
+
+    if (draftState.isComplete || window.currentRoomMode === 'auto_sim') {
+        recChipsContainer.innerHTML = '<span class="rec-empty">No active recommendations</span>';
+        return;
+    }
+
+    const recData = getRecommendations();
+    if (!recData.list || recData.list.length === 0) {
+        recChipsContainer.innerHTML = '<span class="rec-empty">No candidates available</span>';
+        return;
+    }
+
+    if (recTitleText) {
+        recTitleText.textContent = (recData.type === 'ban') ? 'Suggested Bans:' : 'Suggested Picks:';
+    }
+
+    recData.list.forEach(hero => {
+        const chip = document.createElement('div');
+        chip.className = `rec-chip ${recData.type === 'ban' ? 'rec-ban' : 'rec-pick'}`;
+        
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+        chip.innerHTML = `
+            ${createHeroAvatarHTML(hero, 'rec-avatar')}
+            <div class="rec-info">
+                <span class="rec-name">${hero.name}</span>
+                <span class="rec-role">${lanes.join('/')}</span>
+            </div>
+        `;
+
+        chip.addEventListener('click', () => {
+            if (isSubmittingAction || isHeroUnavailable(hero.id)) return;
+            isSubmittingAction = true;
+            socket.emit('select_hero', { heroId: hero.id });
+        });
+
+        recChipsContainer.appendChild(chip);
+    });
+}
+
+function renderActionLogs() {
+    if (!draftLogList) return;
+    draftLogList.innerHTML = '';
+    const logs = draftState.draftLog || [];
+
+    if (logs.length === 0) {
+        draftLogList.innerHTML = '<li class="log-item placeholder">Draft initialized. Waiting for first action...</li>';
+        return;
+    }
+
+    logs.forEach(l => {
+        const li = document.createElement('li');
+        li.className = 'log-item';
+        li.textContent = `Turn ${l.turn} [${l.phase}]: Team ${l.team} ${l.action.toUpperCase()}ED ${l.hero}`;
+        draftLogList.appendChild(li);
+    });
+    draftLogList.scrollTop = draftLogList.scrollHeight;
+}
+
+function showPostDraftEvaluation() {
     if (!postDraftModal) return;
-    const resultA = evaluateTeamDraft(draftState.picks.A);
-    const resultB = evaluateTeamDraft(draftState.picks.B);
 
-    if (scoreTeamA) scoreTeamA.innerText = resultA.score;
-    if (scoreTeamB) scoreTeamB.innerText = resultB.score;
+    const evalA = evaluateTeamDraft(draftState.picks?.A || []);
+    const evalB = evaluateTeamDraft(draftState.picks?.B || []);
 
-    if (breakdownTeamA) breakdownTeamA.innerHTML = resultA.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
-    if (breakdownTeamB) breakdownTeamB.innerHTML = resultB.breakdown.map(item => `<li class="${item.type}">${item.text}</li>`).join('');
+    if (scoreTeamA) scoreTeamA.textContent = `${evalA.score}`;
+    if (scoreTeamB) scoreTeamB.textContent = `${evalB.score}`;
 
-    if (compPicksA) compPicksA.innerText = draftState.picks.A.map(h => h.name).join(', ') || 'None';
-    if (compPicksB) compPicksB.innerText = draftState.picks.B.map(h => h.name).join(', ') || 'None';
-    if (compBansA) compBansA.innerText = draftState.bans.A.map(h => h.name).join(', ') || 'None';
-    if (compBansB) compBansB.innerText = draftState.bans.B.map(h => h.name).join(', ') || 'None';
+    if (breakdownTeamA) {
+        breakdownTeamA.innerHTML = evalA.breakdown.map(b => `<li class="${b.type}">${b.text}</li>`).join('');
+    }
+    if (breakdownTeamB) {
+        breakdownTeamB.innerHTML = evalB.breakdown.map(b => `<li class="${b.type}">${b.text}</li>`).join('');
+    }
 
-    if (compLanesA) compLanesA.innerText = resultA.coveredLanes.join(', ') || 'None';
-    if (compLanesB) compLanesB.innerText = resultB.coveredLanes.join(', ') || 'None';
+    if (compPicksA) compPicksA.textContent = (draftState.picks?.A || []).map(h => h.name).join(', ') || '-';
+    if (compBansA) compBansA.textContent = (draftState.bans?.A || []).map(h => h.name).join(', ') || '-';
+    if (compLanesA) compLanesA.textContent = evalA.coveredLanes.join(', ') || 'None';
+
+    if (compPicksB) compPicksB.textContent = (draftState.picks?.B || []).map(h => h.name).join(', ') || '-';
+    if (compBansB) compBansB.textContent = (draftState.bans?.B || []).map(h => h.name).join(', ') || '-';
+    if (compLanesB) compLanesB.textContent = evalB.coveredLanes.join(', ') || 'None';
 
     postDraftModal.classList.remove('hidden');
 }
 
-if (btnCloseModal) {
-    btnCloseModal.addEventListener('click', () => {
-        if (postDraftModal) postDraftModal.classList.add('hidden');
-    });
-}
+// =========================================================================
+// SOCKET EVENT HANDLERS
+// =========================================================================
+socket.on('connect', () => {
+    if (connectionStatus) {
+        connectionStatus.className = 'status-badge connected';
+        if (connLabel) connLabel.textContent = 'Online';
+    }
+});
 
-function updateUI() {
-    renderTimeline();
-    renderRecommendations();
-    renderHeroGrid();
-    renderDraftLog();
-    updateTurnStatusUI();
-}
+socket.on('disconnect', () => {
+    if (connectionStatus) {
+        connectionStatus.className = 'status-badge disconnected';
+        if (connLabel) connLabel.textContent = 'Offline';
+    }
+});
 
-if (heroSearch) {
-    heroSearch.addEventListener('input', (e) => {
-        currentSearchQuery = e.target.value;
-        renderHeroGrid();
-    });
-}
+socket.on('room_created', (data) => {
+    currentRoomId = data.roomId;
+    currentAssignedTeam = data.yourTeam;
+    window.currentRoomMode = data.mode;
 
-laneButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        laneButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentLaneFilter = btn.dataset.lane.toUpperCase();
-        renderHeroGrid();
-    });
+    if (data.mode === 'pvp' && !data.draftState.started) {
+        showScreen('lobby-screen');
+        syncStagingLobbyUI(data);
+    } else {
+        showScreen('draft-screen');
+        syncDraftArenaUI(data);
+    }
+});
+
+socket.on('room_joined', (data) => {
+    currentRoomId = data.roomId;
+    currentAssignedTeam = data.yourTeam;
+    window.currentRoomMode = data.mode;
+
+    if (data.mode === 'pvp' && !data.draftState.started) {
+        showScreen('lobby-screen');
+        syncStagingLobbyUI(data);
+    } else {
+        showScreen('draft-screen');
+        syncDraftArenaUI(data);
+    }
+});
+
+socket.on('draft_updated', (data) => {
+    if (data.mode === 'pvp' && !data.draftState.started) {
+        showScreen('lobby-screen');
+        syncStagingLobbyUI(data);
+    } else {
+        showScreen('draft-screen');
+        syncDraftArenaUI(data);
+    }
+});
+
+socket.on('room_error', (data) => {
+    alert(data.message || 'Room error occurred.');
+});
+
+socket.on('reset_requested', () => {
+    resetConfirmModal?.classList.remove('hidden');
+});
+
+socket.on('reset_declined', (data) => {
+    alert(data.message || 'Reset request was declined.');
+});
+
+socket.on('player_disconnected', (data) => {
+    if (disconnectModal) {
+        let remainingSeconds = data.timeoutSeconds || 30;
+        if (disconnectCountdown) disconnectCountdown.textContent = remainingSeconds;
+        disconnectModal.classList.remove('hidden');
+
+        if (disconnectInterval) clearInterval(disconnectInterval);
+        disconnectInterval = setInterval(() => {
+            remainingSeconds--;
+            if (disconnectCountdown) disconnectCountdown.textContent = Math.max(0, remainingSeconds);
+            if (remainingSeconds <= 0) {
+                clearInterval(disconnectInterval);
+            }
+        }, 1000);
+    }
+});
+
+socket.on('player_reconnected', () => {
+    if (disconnectInterval) clearInterval(disconnectInterval);
+    disconnectModal?.classList.add('hidden');
+});
+
+socket.on('room_dismissed', (data) => {
+    if (disconnectInterval) clearInterval(disconnectInterval);
+    alert(data.message || 'Room was closed.');
+    window.location.reload();
 });

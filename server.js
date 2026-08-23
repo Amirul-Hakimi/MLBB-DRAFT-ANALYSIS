@@ -119,7 +119,6 @@ function computeAIMoveForTeam(draftState, activeTeam) {
     }
 
     return selectWeightedRandomHero(candidateHeroes, h => {
-        // Weight selection by explicit role-specific pick rates
         if (neededLanes.length > 0) {
             const matchedLane = neededLanes.find(l => h.roles && h.roles[l]);
             if (matchedLane) return h.roles[matchedLane].pickRate;
@@ -270,8 +269,12 @@ io.on('connection', (socket) => {
             pendingResetBy: null,
             cleanupTimer: null,
             players: {
-                A: mode === 'auto_sim' ? { socketId: 'AI_BOT_A', playerToken: 'AI_BOT_A', connected: true, ready: true } : { socketId: socket.id, playerToken, connected: true, ready: mode !== 'pvp' },
-                B: mode === 'pvp' ? null : { socketId: 'AI_BOT_B', playerToken: 'AI_BOT_B', connected: true, ready: true }
+                A: mode === 'auto_sim' 
+                    ? { socketId: 'AI_BOT_A', playerToken: 'AI_BOT_A', connected: true, ready: true } 
+                    : { socketId: socket.id, playerToken, connected: true, ready: mode !== 'pvp' },
+                B: mode === 'pvp' 
+                    ? null 
+                    : { socketId: 'AI_BOT_B', playerToken: 'AI_BOT_B', connected: true, ready: true }
             },
             status: mode === 'pvp' ? 'waiting' : 'ready',
             simInterval: null,
@@ -414,20 +417,18 @@ io.on('connection', (socket) => {
         });
     });
 
-    // TOGGLE READY
+    // PVP TOGGLE READY
     socket.on('toggle_ready', () => {
         const roomId = socket.currentRoomId;
-        const playerTeam = socket.assignedTeam;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'pvp' || room.draftState.started) return;
+        if (!room || room.mode !== 'pvp') return;
 
-        if (room.players[playerTeam]) {
-            room.players[playerTeam].ready = !room.players[playerTeam].ready;
-        }
+        const team = socket.assignedTeam;
+        if (!team || !room.players || !room.players[team]) return;
 
-        const bothReady = room.players.A && room.players.B && room.players.A.connected && room.players.B.connected && room.players.A.ready && room.players.B.ready;
+        room.players[team].ready = !room.players[team].ready;
 
-        if (bothReady) {
+        if (room.players.A && room.players.A.ready && room.players.B && room.players.B.ready) {
             room.draftState.started = true;
             room.status = 'drafting';
         }
@@ -435,7 +436,7 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('draft_updated', {
             roomId: roomId,
             draftState: room.draftState,
-            status: bothReady ? 'drafting' : 'waiting',
+            status: room.status,
             mode: room.mode,
             players: getRoomPlayersSummary(room)
         });
