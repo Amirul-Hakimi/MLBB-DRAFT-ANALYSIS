@@ -166,10 +166,11 @@ function getHeroBanRate(hero) {
     return (hero && hero.banRate) || 0;
 }
 
+// Automatically ensure .lanes and local image paths are populated
 const HERO_DATASET = Array.from(heroMap.values()).map(hero => ({
     ...hero,
     lanes: getHeroLanes(hero),
-    image: hero.image
+    image: `/assets/heroes/${hero.id}.png` // Loads the downloaded Fandom PNG
 }));
 
 if (typeof module !== 'undefined' && module.exports) {
