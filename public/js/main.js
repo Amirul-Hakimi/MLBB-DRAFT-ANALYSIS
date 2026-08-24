@@ -4,25 +4,29 @@
 
 const socket = io();
 
-// Local Player Token (Session-isolated per browser tab)
+// Local Player Token & Active Room Tracking (Session-isolated per browser tab)
 let clientPlayerToken = sessionStorage.getItem('mlbb_player_token');
 if (!clientPlayerToken) {
     clientPlayerToken = 'usr_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
     sessionStorage.setItem('mlbb_player_token', clientPlayerToken);
 }
 
-// Client View State
-let currentRoomId = null;
+// Check if user was previously in an active room before refresh
+let savedRoomId = sessionStorage.getItem('mlbb_active_room_id');
+let currentRoomId = savedRoomId || null;
 let currentAssignedTeam = 'SPEC'; // 'A' | 'B' | 'SPEC'
 window.currentRoomMode = 'vs_ai'; // 'vs_ai' | 'auto_sim' | 'pvp'
 let currentDraftState = null;
 let isSubmittingAction = false;
 let disconnectInterval = null;
 
-// Filter State
+// Filter & Cache State
 let currentFilterMode = 'lane'; // 'lane' | 'role'
 let currentCategoryFilter = 'ALL';
 let currentSearchQuery = '';
+let searchDebounceTimer = null;
+const heroCardNodeCache = new Map();
+let cachedRecommendedIds = new Set();
 
 const LANE_FILTERS = [
     { label: 'ALL', key: 'ALL' },
@@ -59,10 +63,45 @@ let historyModal, btnViewHistory, btnCloseHistory, historyListContainer;
 let disconnectModal, disconnectCountdown, btnLeaveNow;
 
 // =========================================================================
+// TOAST & CONNECTION HELPERS
+// =========================================================================
+function showToast(message, type = 'error', durationMs = 3000) {
+    const toast = document.getElementById('app-toast');
+    const toastMsg = document.getElementById('toast-message');
+    const toastIcon = document.getElementById('toast-icon');
+    if (!toast || !toastMsg) return;
+
+    toastMsg.textContent = message;
+    if (toastIcon) {
+        toastIcon.textContent = type === 'error' ? '⚠️' : (type === 'success' ? '✓' : 'ℹ️');
+    }
+    
+    toast.className = `app-toast toast-${type}`;
+    toast.classList.remove('hidden');
+
+    if (window.toastTimeout) clearTimeout(window.toastTimeout);
+    window.toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+    }, durationMs);
+}
+
+function updateConnectionBadge(state) {
+    const badge = document.getElementById('connection-status');
+    const label = badge?.querySelector('.status-label');
+    if (!badge || !label) return;
+
+    badge.className = `status-badge ${state.toLowerCase()}`;
+    label.textContent = state.toUpperCase();
+}
+
+function clearActiveRoomSession() {
+    sessionStorage.removeItem('mlbb_active_room_id');
+    currentRoomId = null;
+}
+
+// =========================================================================
 // AVATAR GENERATION WITH FALLBACKS
 // =========================================================================
-
-// Exact image asset mappings for special/hyphenated hero names
 const HERO_IMAGE_ALIASES = {
     "change": "chang'e",
     "popol_and_kupa": "popol-and-kupa",
@@ -79,12 +118,12 @@ function createHeroAvatarHTML(hero, customClass = '') {
     if (!hero) return '';
     const name = hero.name || 'Hero';
     
-    // Check alias mapping or fallback to hyphenated format
     const assetKey = HERO_IMAGE_ALIASES[hero.id] || hero.id.replace(/_/g, '-');
-    
-    // 1. Direct raw CDN paths (encoded for special characters like ')
+    const cleanWikiName = name.replace(/\s+/g, '_').replace(/'/g, '%27');
+
     const primaryUrl = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/${encodeURIComponent(assetKey)}.png`;
     const secondaryUrl = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/${assetKey.replace(/'/g, '')}.png`;
+    const wikiUrl = `https://mobile-legends.fandom.com/wiki/Special:FilePath/${cleanWikiName}.png`;
     const localUrl = `/assets/heroes/${hero.id}.png`;
 
     return `
@@ -100,6 +139,9 @@ function createHeroAvatarHTML(hero, customClass = '') {
                     } else if (!this.dataset.triedSecondary) {
                         this.dataset.triedSecondary = 'true';
                         this.src = '${secondaryUrl}';
+                    } else if (!this.dataset.triedWiki) {
+                        this.dataset.triedWiki = 'true';
+                        this.src = '${wikiUrl}';
                     }
                  " />
         </div>
@@ -203,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDualFilterSystem();
     buildTimelineTrack();
     renderFilterPills();
-    renderHeroGrid();
+    buildInitialHeroGrid();
 });
 
 // =========================================================================
@@ -258,7 +300,7 @@ function initSetupListeners() {
             if (targetCode.length > 0) {
                 joinRoom(targetCode);
             } else {
-                alert('Please enter a 6-character room code.');
+                showToast('Please enter a 6-character room code.', 'error');
             }
         }
     });
@@ -287,7 +329,7 @@ function initDualFilterSystem() {
             modeRoleBtn.classList.add('btn-secondary');
             modeRoleBtn.classList.remove('active');
             renderFilterPills();
-            renderHeroGrid();
+            updateHeroGridState();
         });
 
         modeRoleBtn.addEventListener('click', () => {
@@ -299,14 +341,17 @@ function initDualFilterSystem() {
             modeLaneBtn.classList.add('btn-secondary');
             modeLaneBtn.classList.remove('active');
             renderFilterPills();
-            renderHeroGrid();
+            updateHeroGridState();
         });
     }
 
     if (heroSearchInput) {
         heroSearchInput.addEventListener('input', (e) => {
             currentSearchQuery = e.target.value.trim();
-            renderHeroGrid();
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                updateHeroGridState();
+            }, 150);
         });
     }
 }
@@ -326,60 +371,38 @@ function renderFilterPills() {
         btn.addEventListener('click', () => {
             currentCategoryFilter = item.key;
             renderFilterPills();
-            renderHeroGrid();
+            updateHeroGridState();
         });
 
         filterPillsContainer.appendChild(btn);
     });
 }
 
-function renderHeroGrid() {
+// Persistent Initial Render with Event Delegation
+function buildInitialHeroGrid() {
     if (!heroGrid) return;
     heroGrid.innerHTML = '';
+    heroCardNodeCache.clear();
 
-    const recData = getRecommendations();
-    const recommendedIds = recData.list ? recData.list.map(h => h.id) : [];
+    const fragment = document.createDocumentFragment();
 
-    const filteredHeroes = HERO_DATASET.filter(hero => {
-        const matchesName = hero.name.toLowerCase().includes(currentSearchQuery.toLowerCase());
-
-        let matchesCategory = false;
-        if (currentCategoryFilter.toUpperCase() === 'ALL') {
-            matchesCategory = true;
-        } else if (currentFilterMode === 'lane') {
-            const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
-            matchesCategory = lanes.some(l => l.toUpperCase() === currentCategoryFilter.toUpperCase());
-        } else if (currentFilterMode === 'role') {
-            const classes = (typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []);
-            matchesCategory = classes.some(c => c.toUpperCase() === currentCategoryFilter.toUpperCase());
-        }
-
-        return matchesName && matchesCategory;
-    });
-
-    filteredHeroes.forEach(hero => {
+    HERO_DATASET.forEach(hero => {
         const card = document.createElement('div');
         card.className = 'hero-card';
+        card.dataset.heroId = hero.id;
 
-        const unavailable = isHeroUnavailable(hero.id);
-        const isSimMode = window.currentRoomMode === 'auto_sim';
-        const isRecommended = recommendedIds.includes(hero.id) && !unavailable && !draftState.isComplete && !isSimMode;
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+        const classes = (typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []);
 
-        if (unavailable || draftState.isComplete || isSimMode) {
-            card.classList.add('disabled');
-        } else if (isRecommended) {
-            card.classList.add('recommended');
-        }
+        card.dataset.name = hero.name.toLowerCase();
+        card.dataset.lanes = lanes.join(',').toLowerCase();
+        card.dataset.classes = classes.join(',').toLowerCase();
 
-        const displayTags = (currentFilterMode === 'lane')
-            ? ((typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []))
-            : ((typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []));
-
+        const displayTags = (currentFilterMode === 'lane') ? lanes : classes;
         const tagsHtml = displayTags.map(t => `<span class="tag-badge">${t}</span>`).join('');
-        const badgeHtml = isRecommended ? `<span class="rec-badge">REC</span>` : '';
 
+        // Do NOT insert <span class="rec-badge"> by default here
         card.innerHTML = `
-            ${badgeHtml}
             ${createHeroAvatarHTML(hero, 'card-avatar')}
             <div class="card-info">
                 <span class="card-name">${hero.name}</span>
@@ -387,15 +410,101 @@ function renderHeroGrid() {
             </div>
         `;
 
-        if (!isSimMode && !unavailable && !draftState.isComplete) {
-            card.addEventListener('click', () => {
-                if (isSubmittingAction) return;
-                isSubmittingAction = true;
-                socket.emit('select_hero', { heroId: hero.id });
+        heroCardNodeCache.set(hero.id, card);
+        fragment.appendChild(card);
+    });
+
+    heroGrid.appendChild(fragment);
+
+    // Event Delegation
+    heroGrid.addEventListener('click', (e) => {
+        const card = e.target.closest('.hero-card');
+        if (!card || card.classList.contains('disabled') || isSubmittingAction) return;
+
+        const heroId = card.dataset.heroId;
+        if (!heroId || isHeroUnavailable(heroId)) return;
+
+        isSubmittingAction = true;
+        socket.emit('select_hero', { heroId: heroId });
+    });
+
+    updateHeroGridState();
+}
+
+// Lightweight State & Recommendation Updater
+function updateHeroGridState() {
+    if (heroCardNodeCache.size === 0) return;
+
+    const query = currentSearchQuery.toLowerCase();
+    const filterKey = currentCategoryFilter.toLowerCase();
+    const isSimMode = window.currentRoomMode === 'auto_sim';
+    const isComplete = (typeof draftState !== 'undefined' && draftState) ? draftState.isComplete : false;
+
+    // 1. Compute recommended hero IDs for this specific turn
+    let recommendedIdSet = new Set();
+    if (!isComplete && !isSimMode && typeof getRecommendations === 'function') {
+        const recData = getRecommendations();
+        if (recData && Array.isArray(recData.list)) {
+            recData.list.forEach(h => {
+                if (h && h.id) recommendedIdSet.add(h.id);
             });
         }
+    }
 
-        heroGrid.appendChild(card);
+    heroCardNodeCache.forEach((card, heroId) => {
+        // Fast filtering check
+        const matchesName = !query || card.dataset.name.includes(query);
+        let matchesCategory = (filterKey === 'all');
+
+        if (!matchesCategory) {
+            if (currentFilterMode === 'lane') {
+                matchesCategory = card.dataset.lanes.includes(filterKey);
+            } else {
+                matchesCategory = card.dataset.classes.includes(filterKey);
+            }
+        }
+
+        if (!matchesName || !matchesCategory) {
+            card.style.display = 'none';
+            return;
+        }
+        card.style.display = 'flex';
+
+        // Update tag pills
+        const hero = HERO_DATASET.find(h => h.id === heroId);
+        const tagsContainer = card.querySelector('.card-tags');
+        if (tagsContainer && hero) {
+            const displayTags = (currentFilterMode === 'lane')
+                ? ((typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []))
+                : ((typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []));
+            tagsContainer.innerHTML = displayTags.map(t => `<span class="tag-badge">${t}</span>`).join('');
+        }
+
+        const unavailable = isHeroUnavailable(heroId);
+        const shouldDisable = unavailable || isComplete || isSimMode;
+        const isRecommended = recommendedIdSet.has(heroId) && !shouldDisable;
+
+        let recBadge = card.querySelector('.rec-badge');
+
+        if (shouldDisable) {
+            card.classList.add('disabled');
+            card.classList.remove('recommended');
+            if (recBadge) recBadge.remove();
+        } else {
+            card.classList.remove('disabled');
+            if (isRecommended) {
+                card.classList.add('recommended');
+                if (!recBadge) {
+                    const badge = document.createElement('span');
+                    badge.className = 'rec-badge';
+                    badge.textContent = 'REC';
+                    card.prepend(badge);
+                }
+            } else {
+                card.classList.remove('recommended');
+                if (recBadge) recBadge.remove();
+            }
+        }
     });
 }
 
@@ -433,7 +542,6 @@ function updateTimelineUI() {
 // DRAFT INTERACTION & CONTROLS
 // =========================================================================
 function initDraftListeners() {
-    // Copy Room Code
     btnCopyCode?.addEventListener('click', () => {
         if (!currentRoomId) return;
         navigator.clipboard.writeText(currentRoomId).then(() => {
@@ -442,22 +550,37 @@ function initDraftListeners() {
         });
     });
 
-    // Toggle Ready in Staging
     btnToggleReady?.addEventListener('click', () => socket.emit('toggle_ready'));
 
-    // Leave Lobby / Exit Room
-    btnLobbyLeave?.addEventListener('click', () => window.location.reload());
-    btnLeaveRoom?.addEventListener('click', () => window.location.reload());
-    btnLeaveNow?.addEventListener('click', () => window.location.reload());
+    btnLobbyLeave?.addEventListener('click', () => {
+        clearActiveRoomSession();
+        socket.emit('leave_room');
+        window.location.reload();
+    });
 
-    // Simulation Controls
+    btnLeaveRoom?.addEventListener('click', () => {
+        clearActiveRoomSession();
+        socket.emit('leave_room');
+        window.location.reload();
+    });
+
+    btnLeaveNow?.addEventListener('click', () => {
+        clearActiveRoomSession();
+        window.location.reload();
+    });
+
+    btnReturnLobby?.addEventListener('click', () => {
+        clearActiveRoomSession();
+        socket.emit('leave_room');
+        window.location.reload();
+    });
+
     btnSimStep?.addEventListener('click', () => socket.emit('sim_step'));
     btnSimAuto?.addEventListener('click', () => socket.emit('sim_start_auto'));
     btnSimPause?.addEventListener('click', () => socket.emit('sim_pause_auto'));
     btnSimReset?.addEventListener('click', () => socket.emit('request_reset'));
     btnManualReset?.addEventListener('click', () => socket.emit('request_reset'));
 
-    // Reset Confirmation Modal
     btnAcceptReset?.addEventListener('click', () => {
         socket.emit('respond_reset', { approved: true });
         resetConfirmModal?.classList.add('hidden');
@@ -467,12 +590,10 @@ function initDraftListeners() {
         resetConfirmModal?.classList.add('hidden');
     });
 
-    // Close Post-Draft Evaluation Modal
     btnCloseModal?.addEventListener('click', () => {
         postDraftModal?.classList.add('hidden');
     });
 
-    // Rematch, New Draft & Return to Lobby
     btnRematch?.addEventListener('click', () => {
         postDraftModal?.classList.add('hidden');
         socket.emit('request_rematch');
@@ -483,11 +604,6 @@ function initDraftListeners() {
         socket.emit('request_reset');
     });
 
-    btnReturnLobby?.addEventListener('click', () => {
-        window.location.reload();
-    });
-
-    // Draft History Modal Open/Close
     btnViewHistory?.addEventListener('click', () => {
         socket.emit('get_draft_history');
         historyModal?.classList.remove('hidden');
@@ -505,7 +621,6 @@ function syncStagingLobbyUI(roomPayload) {
     const { roomId, players, status } = roomPayload;
     if (lobbyRoomCode) lobbyRoomCode.textContent = roomId || '------';
 
-    // Player A
     if (players?.A) {
         lobbyPlayerAName.textContent = (currentAssignedTeam === 'A') ? 'Host (You)' : 'Player A';
         lobbyPlayerAStatus.textContent = players.A.ready ? 'READY' : 'WAITING';
@@ -516,7 +631,6 @@ function syncStagingLobbyUI(roomPayload) {
         lobbyPlayerAStatus.className = 'slot-status-badge waiting';
     }
 
-    // Player B
     if (players?.B) {
         lobbyPlayerBName.textContent = (currentAssignedTeam === 'B') ? 'Player B (You)' : 'Opponent';
         lobbyPlayerBStatus.textContent = players.B.ready ? 'READY' : 'WAITING';
@@ -527,7 +641,6 @@ function syncStagingLobbyUI(roomPayload) {
         lobbyPlayerBStatus.className = 'slot-status-badge waiting';
     }
 
-    // Ready Button
     if (readyBtnText && players && players[currentAssignedTeam]) {
         const isReady = players[currentAssignedTeam].ready;
         readyBtnText.textContent = isReady ? 'CANCEL READY' : 'READY UP';
@@ -541,10 +654,8 @@ function syncDraftArenaUI(roomPayload) {
     draftState = serverDraft;
     currentDraftState = serverDraft;
 
-    // Room ID
     if (roomDisplayTag) roomDisplayTag.textContent = `ROOM: ${roomId || '------'}`;
 
-    // Show/Hide Auto-Sim Toolbar
     if (simControlBar) {
         if (mode === 'auto_sim') {
             simControlBar.classList.remove('hidden');
@@ -553,28 +664,18 @@ function syncDraftArenaUI(roomPayload) {
         }
     }
 
-    // Render Bans
     renderBanChips(blueBans, draftState.bans?.A || []);
     renderBanChips(redBans, draftState.bans?.B || []);
 
-    // Render Compact Pick Bars
     renderPickList(bluePicks, draftState.picks?.A || [], 'A');
     renderPickList(redPicks, draftState.picks?.B || [], 'B');
 
-    // Update Announcer
     updateAnnouncerHeadline(status, mode);
-
-    // Update Recommendations
     renderRecommendations();
-
-    // Update Timeline & Hero Deck
     updateTimelineUI();
-    renderHeroGrid();
-
-    // Update Log Ticker
+    updateHeroGridState();
     renderActionLogs();
 
-    // Show Post-Draft Comparison Screen on completion
     if (draftState.isComplete) {
         showPostDraftEvaluation();
     }
@@ -730,7 +831,6 @@ function showPostDraftEvaluation() {
         ? evaluateDraftComparison(picksA, bansA, picksB, bansB)
         : { scoreA: 75, scoreB: 75, categories: [] };
 
-    // 1. Overall Score & Advantage Badging
     const scoreAEl = document.getElementById('eval-score-a');
     const scoreBEl = document.getElementById('eval-score-b');
     const tagAEl = document.getElementById('advantage-tag-a');
@@ -750,7 +850,6 @@ function showPostDraftEvaluation() {
         if (tagBEl) { tagBEl.textContent = 'Evenly Matched'; tagBEl.className = 'score-advantage-tag'; }
     }
 
-    // 2. Render Comparison Matrix Rows
     const matrixContainer = document.getElementById('comparison-matrix-list');
     if (matrixContainer) {
         matrixContainer.innerHTML = '';
@@ -784,7 +883,6 @@ function showPostDraftEvaluation() {
         });
     }
 
-    // 3. Render Hero Lineups
     const picksAContainer = document.getElementById('lineup-picks-a');
     const bansAContainer = document.getElementById('lineup-bans-a');
     const picksBContainer = document.getElementById('lineup-picks-b');
@@ -799,24 +897,43 @@ function showPostDraftEvaluation() {
 }
 
 // =========================================================================
-// SOCKET EVENT HANDLERS
+// SOCKET EVENT HANDLERS & CONNECTION LIFECYCLE
 // =========================================================================
 socket.on('connect', () => {
-    if (connectionStatus) {
-        connectionStatus.className = 'status-badge connected';
-        if (connLabel) connLabel.textContent = 'Online';
+    updateConnectionBadge('CONNECTED');
+
+    const activeRoom = sessionStorage.getItem('mlbb_active_room_id');
+    if (activeRoom) {
+        socket.emit('join_room', { targetRoomId: activeRoom, playerToken: clientPlayerToken });
     }
 });
 
 socket.on('disconnect', () => {
-    if (connectionStatus) {
-        connectionStatus.className = 'status-badge disconnected';
-        if (connLabel) connLabel.textContent = 'Offline';
+    updateConnectionBadge('DISCONNECTED');
+    showToast('Disconnected from server. Reconnecting...', 'error');
+});
+
+socket.io.on('reconnect_attempt', () => {
+    updateConnectionBadge('RECONNECTING');
+});
+
+socket.io.on('reconnect', () => {
+    updateConnectionBadge('CONNECTED');
+    showToast('Reconnected to draft arena.', 'success');
+    const activeRoom = sessionStorage.getItem('mlbb_active_room_id');
+    if (activeRoom) {
+        socket.emit('join_room', { targetRoomId: activeRoom, playerToken: clientPlayerToken });
     }
+});
+
+socket.io.on('reconnect_failed', () => {
+    updateConnectionBadge('DISCONNECTED');
+    showToast('Failed to reconnect. Please check your internet connection.', 'error');
 });
 
 socket.on('room_created', (data) => {
     currentRoomId = data.roomId;
+    sessionStorage.setItem('mlbb_active_room_id', data.roomId);
     currentAssignedTeam = data.yourTeam;
     window.currentRoomMode = data.mode;
 
@@ -831,6 +948,7 @@ socket.on('room_created', (data) => {
 
 socket.on('room_joined', (data) => {
     currentRoomId = data.roomId;
+    sessionStorage.setItem('mlbb_active_room_id', data.roomId);
     currentAssignedTeam = data.yourTeam;
     window.currentRoomMode = data.mode;
 
@@ -921,8 +1039,21 @@ socket.on('draft_history_data', (historyList) => {
     });
 });
 
+// App & Room Level Errors
+socket.on('app_error', (data) => {
+    isSubmittingAction = false;
+    showToast(data.message || 'Action rejected by server.', 'error');
+});
+
 socket.on('room_error', (data) => {
-    alert(data.message || 'Room error occurred.');
+    clearActiveRoomSession();
+    showToast(data.message || 'Room error occurred.', 'error');
+    showScreen('setup-screen');
+});
+
+socket.on('draft_error', (data) => {
+    isSubmittingAction = false;
+    showToast(data.message || 'Invalid draft action.', 'error');
 });
 
 socket.on('reset_requested', () => {
@@ -930,7 +1061,7 @@ socket.on('reset_requested', () => {
 });
 
 socket.on('reset_declined', (data) => {
-    alert(data.message || 'Reset request was declined.');
+    showToast(data.message || 'Reset request was declined.', 'error');
 });
 
 socket.on('player_disconnected', (data) => {
@@ -953,9 +1084,11 @@ socket.on('player_disconnected', (data) => {
 socket.on('player_reconnected', () => {
     if (disconnectInterval) clearInterval(disconnectInterval);
     disconnectModal?.classList.add('hidden');
+    showToast('Opponent reconnected to the draft room.', 'success');
 });
 
 socket.on('room_dismissed', (data) => {
+    clearActiveRoomSession();
     if (disconnectInterval) clearInterval(disconnectInterval);
     alert(data.message || 'Room was closed.');
     window.location.reload();
