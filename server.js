@@ -44,6 +44,34 @@ const DRAFT_SEQUENCE = [
 
 const activeRooms = {};
 
+// In-Memory Temporary Draft History (Disappears on server restart)
+const temporaryDraftHistory = [];
+
+function recordCompletedDraft(room) {
+    if (!room || !room.draftState || !room.draftState.isComplete) return;
+
+    const historyEntry = {
+        id: 'HIST_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        roomId: room.roomId,
+        mode: room.mode,
+        completedAt: new Date().toISOString(),
+        bans: {
+            A: [...(room.draftState.bans?.A || [])],
+            B: [...(room.draftState.bans?.B || [])]
+        },
+        picks: {
+            A: [...(room.draftState.picks?.A || [])],
+            B: [...(room.draftState.picks?.B || [])]
+        },
+        draftLog: [...(room.draftState.draftLog || [])]
+    };
+
+    temporaryDraftHistory.unshift(historyEntry);
+    if (temporaryDraftHistory.length > 30) {
+        temporaryDraftHistory.pop(); // Retain the last 30 completed drafts
+    }
+}
+
 function sanitizeString(input, maxLen = 20) {
     if (typeof input !== 'string') return '';
     return input.trim().replace(/[^a-zA-Z0-9_-]/g, '').substring(0, maxLen);
@@ -160,6 +188,7 @@ function executeDraftStep(roomId) {
             clearInterval(room.simInterval);
             room.simInterval = null;
         }
+        recordCompletedDraft(room);
     }
 
     io.to(roomId).emit('draft_updated', {
@@ -493,6 +522,7 @@ io.on('connection', (socket) => {
 
         if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
             draft.isComplete = true;
+            recordCompletedDraft(room);
         }
 
         io.to(roomId).emit('draft_updated', {
@@ -536,6 +566,19 @@ io.on('connection', (socket) => {
 
         clearInterval(room.simInterval);
         room.simInterval = null;
+    });
+
+    // DRAFT HISTORY RETRIEVAL
+    socket.on('get_draft_history', () => {
+        socket.emit('draft_history_data', temporaryDraftHistory);
+    });
+
+    // REMATCH REQUEST (Resets same room and retains assigned teams)
+    socket.on('request_rematch', () => {
+        const roomId = socket.currentRoomId;
+        const room = activeRooms[roomId];
+        if (!room) return;
+        performRoomReset(room, roomId);
     });
 
     // RESET CONTROLS

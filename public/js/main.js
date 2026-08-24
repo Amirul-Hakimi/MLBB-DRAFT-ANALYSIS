@@ -4,7 +4,7 @@
 
 const socket = io();
 
-// Local Player Token (Unique per browser tab/session)
+// Local Player Token (Session-isolated per browser tab)
 let clientPlayerToken = sessionStorage.getItem('mlbb_player_token');
 if (!clientPlayerToken) {
     clientPlayerToken = 'usr_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
@@ -54,22 +54,23 @@ let timelineStrip, recommendationPanel, recTitleText, recChipsContainer;
 let heroSearchInput, filterPillsContainer, modeLaneBtn, modeRoleBtn, heroGrid;
 let draftLogList, btnManualReset, btnLeaveRoom;
 let resetConfirmModal, resetRequestText, btnAcceptReset, btnDeclineReset;
-let postDraftModal, scoreTeamA, scoreTeamB, breakdownTeamA, breakdownTeamB, compPicksA, compBansA, compLanesA, compPicksB, compBansB, compLanesB, btnCloseModal;
+let postDraftModal, btnCloseModal, btnRematch, btnNewDraft, btnReturnLobby;
+let historyModal, btnViewHistory, btnCloseHistory, historyListContainer;
 let disconnectModal, disconnectCountdown, btnLeaveNow;
 
 // =========================================================================
-// AVATAR GENERATION (Real Image Resolvers)
+// AVATAR GENERATION WITH FALLBACKS
 // =========================================================================
 
-// Special alias dictionary for heroes whose repo image keys differ from default IDs
+// Exact image asset mappings for special/hyphenated hero names
 const HERO_IMAGE_ALIASES = {
+    "change": "chang'e",
     "popol_and_kupa": "popol-and-kupa",
     "x_borg": "x.borg",
     "yi_sun_shin": "yi-sun-shin",
     "yu_zhong": "yu-zhong",
     "lapu_lapu": "lapu-lapu",
     "luo_yi": "luo-yi",
-    "change": "chang-e",
     "sora": "cici",
     "zetian": "zhuxin"
 };
@@ -78,38 +79,33 @@ function createHeroAvatarHTML(hero, customClass = '') {
     if (!hero) return '';
     const name = hero.name || 'Hero';
     
-    // Clean name for URL encoding (replace apostrophe with %27 for Chang'e)
-    const cleanWikiName = name.replace(/\s+/g, '_').replace(/'/g, '%27');
+    // Check alias mapping or fallback to hyphenated format
+    const assetKey = HERO_IMAGE_ALIASES[hero.id] || hero.id.replace(/_/g, '-');
     
-    const localSrc = hero.image || `/assets/heroes/${hero.id}.png`;
-    const aliasKey = HERO_IMAGE_ALIASES[hero.id] || hero.id.replace(/_/g, '-');
-    
-    // Direct working CDN mirrors
-    const githubMirror = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/${aliasKey}.png`;
-    const wikiMirror = `https://mobile-legends.fandom.com/wiki/Special:FilePath/${cleanWikiName}.png`;
-    const fallbackDirect = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/change.png`;
+    // 1. Direct raw CDN paths (encoded for special characters like ')
+    const primaryUrl = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/${encodeURIComponent(assetKey)}.png`;
+    const secondaryUrl = `https://raw.githubusercontent.com/fshangala/mlbb-heroes-dataset/master/images/${assetKey.replace(/'/g, '')}.png`;
+    const localUrl = `/assets/heroes/${hero.id}.png`;
 
     return `
         <div class="hero-avatar-wrapper ${customClass}">
             <img class="hero-img" 
-                 src="${localSrc}" 
+                 src="${localUrl}" 
                  alt="${name}" 
                  loading="lazy"
                  onerror="
-                    if (!this.dataset.triedGithub) {
-                        this.dataset.triedGithub = 'true';
-                        this.src = '${githubMirror}';
-                    } else if (!this.dataset.triedWiki) {
-                        this.dataset.triedWiki = 'true';
-                        this.src = '${wikiMirror}';
-                    } else if (!this.dataset.triedDirect) {
-                        this.dataset.triedDirect = 'true';
-                        this.src = '${fallbackDirect}';
+                    if (!this.dataset.triedPrimary) {
+                        this.dataset.triedPrimary = 'true';
+                        this.src = '${primaryUrl}';
+                    } else if (!this.dataset.triedSecondary) {
+                        this.dataset.triedSecondary = 'true';
+                        this.src = '${secondaryUrl}';
                     }
                  " />
         </div>
     `;
 }
+
 // =========================================================================
 // INITIALIZATION
 // =========================================================================
@@ -124,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     connDot = connectionStatus?.querySelector('.status-dot');
     connLabel = connectionStatus?.querySelector('.status-label');
 
-    // Setup screen elements
+    // Setup screen
     btnModeAi = document.getElementById('btn-mode-ai');
     btnModeSim = document.getElementById('btn-mode-sim');
     btnModeCreate = document.getElementById('btn-mode-create');
@@ -133,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     roomIdInput = document.getElementById('room-id-input');
     btnEnterRoom = document.getElementById('btn-enter-room');
 
-    // Lobby screen elements
+    // Lobby screen
     lobbyRoomCode = document.getElementById('lobby-room-code');
     btnCopyCode = document.getElementById('btn-copy-code');
     copyToast = document.getElementById('copy-toast');
@@ -145,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnToggleReady = document.getElementById('btn-toggle-ready');
     readyBtnText = document.getElementById('ready-btn-text');
 
-    // Draft screen elements
+    // Draft screen
     simControlBar = document.getElementById('sim-control-bar');
     btnSimStep = document.getElementById('btn-sim-step');
     btnSimAuto = document.getElementById('btn-sim-auto');
@@ -178,25 +174,26 @@ document.addEventListener('DOMContentLoaded', () => {
     btnManualReset = document.getElementById('btn-manual-reset');
     btnLeaveRoom = document.getElementById('btn-leave-room');
 
-    // Modals
+    // Reset Modal
     resetConfirmModal = document.getElementById('reset-confirm-modal');
     resetRequestText = document.getElementById('reset-request-text');
     btnAcceptReset = document.getElementById('btn-accept-reset');
     btnDeclineReset = document.getElementById('btn-decline-reset');
 
+    // Post-Draft Evaluation Modal
     postDraftModal = document.getElementById('post-draft-modal');
-    scoreTeamA = document.getElementById('score-team-a');
-    scoreTeamB = document.getElementById('score-team-b');
-    breakdownTeamA = document.getElementById('breakdown-team-a');
-    breakdownTeamB = document.getElementById('breakdown-team-b');
-    compPicksA = document.getElementById('comp-picks-a');
-    compBansA = document.getElementById('comp-bans-a');
-    compLanesA = document.getElementById('comp-lanes-a');
-    compPicksB = document.getElementById('comp-picks-b');
-    compBansB = document.getElementById('comp-bans-b');
-    compLanesB = document.getElementById('comp-lanes-b');
     btnCloseModal = document.getElementById('btn-close-modal');
+    btnRematch = document.getElementById('btn-rematch');
+    btnNewDraft = document.getElementById('btn-new-draft');
+    btnReturnLobby = document.getElementById('btn-return-lobby');
 
+    // Draft History Modal
+    historyModal = document.getElementById('history-modal');
+    btnViewHistory = document.getElementById('btn-view-history');
+    btnCloseHistory = document.getElementById('btn-close-history');
+    historyListContainer = document.getElementById('history-list-container');
+
+    // Disconnect Modal
     disconnectModal = document.getElementById('disconnect-modal');
     disconnectCountdown = document.getElementById('disconnect-countdown');
     btnLeaveNow = document.getElementById('btn-leave-now');
@@ -224,7 +221,7 @@ function showScreen(screenId) {
 }
 
 // =========================================================================
-// SETUP SCREEN & MODE SELECTORS
+// SETUP SCREEN CONTROLS
 // =========================================================================
 let selectedSetupMode = 'vs_ai';
 
@@ -402,6 +399,22 @@ function renderHeroGrid() {
     });
 }
 
+// =========================================================================
+// TIMELINE TRACK BUILDER
+// =========================================================================
+function buildTimelineTrack() {
+    if (!timelineStrip) return;
+    timelineStrip.innerHTML = '';
+
+    DRAFT_SEQUENCE.forEach((seq, idx) => {
+        const step = document.createElement('div');
+        step.className = `timeline-node team-${seq.team.toLowerCase()}`;
+        step.id = `timelineStep_${idx}`;
+        step.textContent = `${seq.turn}:${seq.action[0].toUpperCase()}`;
+        timelineStrip.appendChild(step);
+    });
+}
+
 function updateTimelineUI() {
     DRAFT_SEQUENCE.forEach((seq, idx) => {
         const el = document.getElementById(`timelineStep_${idx}`);
@@ -430,9 +443,7 @@ function initDraftListeners() {
     });
 
     // Toggle Ready in Staging
-    btnToggleReady?.addEventListener('click', () => {
-        socket.emit('toggle_ready');
-    });
+    btnToggleReady?.addEventListener('click', () => socket.emit('toggle_ready'));
 
     // Leave Lobby / Exit Room
     btnLobbyLeave?.addEventListener('click', () => window.location.reload());
@@ -456,9 +467,34 @@ function initDraftListeners() {
         resetConfirmModal?.classList.add('hidden');
     });
 
-    // Close Post-Draft Evaluation
+    // Close Post-Draft Evaluation Modal
     btnCloseModal?.addEventListener('click', () => {
         postDraftModal?.classList.add('hidden');
+    });
+
+    // Rematch, New Draft & Return to Lobby
+    btnRematch?.addEventListener('click', () => {
+        postDraftModal?.classList.add('hidden');
+        socket.emit('request_rematch');
+    });
+
+    btnNewDraft?.addEventListener('click', () => {
+        postDraftModal?.classList.add('hidden');
+        socket.emit('request_reset');
+    });
+
+    btnReturnLobby?.addEventListener('click', () => {
+        window.location.reload();
+    });
+
+    // Draft History Modal Open/Close
+    btnViewHistory?.addEventListener('click', () => {
+        socket.emit('get_draft_history');
+        historyModal?.classList.remove('hidden');
+    });
+
+    btnCloseHistory?.addEventListener('click', () => {
+        historyModal?.classList.add('hidden');
     });
 }
 
@@ -503,6 +539,7 @@ function syncDraftArenaUI(roomPayload) {
     isSubmittingAction = false;
     const { draftState: serverDraft, status, mode, players, roomId } = roomPayload;
     draftState = serverDraft;
+    currentDraftState = serverDraft;
 
     // Room ID
     if (roomDisplayTag) roomDisplayTag.textContent = `ROOM: ${roomId || '------'}`;
@@ -520,7 +557,7 @@ function syncDraftArenaUI(roomPayload) {
     renderBanChips(blueBans, draftState.bans?.A || []);
     renderBanChips(redBans, draftState.bans?.B || []);
 
-    // Render Picks
+    // Render Compact Pick Bars
     renderPickList(bluePicks, draftState.picks?.A || [], 'A');
     renderPickList(redPicks, draftState.picks?.B || [], 'B');
 
@@ -537,7 +574,7 @@ function syncDraftArenaUI(roomPayload) {
     // Update Log Ticker
     renderActionLogs();
 
-    // Show Post-Draft Modal on Complete
+    // Show Post-Draft Comparison Screen on completion
     if (draftState.isComplete) {
         showPostDraftEvaluation();
     }
@@ -555,8 +592,10 @@ function renderBanChips(container, bans) {
         const chip = document.createElement('div');
         chip.className = 'ban-badge';
         chip.innerHTML = `
-            ${createHeroAvatarHTML(hero, 'ban-avatar')}
-            <span>${hero.name}</span>
+            <div class="ban-avatar-box">
+                ${createHeroAvatarHTML(hero, 'ban-avatar-img')}
+            </div>
+            <span class="ban-hero-name">${hero.name}</span>
         `;
         container.appendChild(chip);
     });
@@ -574,7 +613,9 @@ function renderPickList(container, picks, teamKey) {
             const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
             li.className = 'pick-slot locked';
             li.innerHTML = `
-                ${createHeroAvatarHTML(hero, 'pick-avatar')}
+                <div class="pick-slot-avatar">
+                    ${createHeroAvatarHTML(hero, 'pick-avatar-img')}
+                </div>
                 <div class="pick-meta">
                     <span class="hero-title">${hero.name}</span>
                     <span class="role-desc">${lanes.join('/')}</span>
@@ -670,31 +711,91 @@ function renderActionLogs() {
     draftLogList.scrollTop = draftLogList.scrollHeight;
 }
 
+// =========================================================================
+// POST-DRAFT COMPARISON SCREEN EVALUATION
+// =========================================================================
 function showPostDraftEvaluation() {
-    if (!postDraftModal) return;
+    const modal = document.getElementById('post-draft-modal');
+    if (!modal) return;
 
-    const evalA = evaluateTeamDraft(draftState.picks?.A || []);
-    const evalB = evaluateTeamDraft(draftState.picks?.B || []);
+    const state = (typeof draftState !== 'undefined' && draftState) ? draftState : currentDraftState;
+    if (!state) return;
 
-    if (scoreTeamA) scoreTeamA.textContent = `${evalA.score}`;
-    if (scoreTeamB) scoreTeamB.textContent = `${evalB.score}`;
+    const picksA = state.picks?.A || [];
+    const bansA = state.bans?.A || [];
+    const picksB = state.picks?.B || [];
+    const bansB = state.bans?.B || [];
 
-    if (breakdownTeamA) {
-        breakdownTeamA.innerHTML = evalA.breakdown.map(b => `<li class="${b.type}">${b.text}</li>`).join('');
+    const evalResult = (typeof evaluateDraftComparison === 'function')
+        ? evaluateDraftComparison(picksA, bansA, picksB, bansB)
+        : { scoreA: 75, scoreB: 75, categories: [] };
+
+    // 1. Overall Score & Advantage Badging
+    const scoreAEl = document.getElementById('eval-score-a');
+    const scoreBEl = document.getElementById('eval-score-b');
+    const tagAEl = document.getElementById('advantage-tag-a');
+    const tagBEl = document.getElementById('advantage-tag-b');
+
+    if (scoreAEl) scoreAEl.textContent = evalResult.scoreA;
+    if (scoreBEl) scoreBEl.textContent = evalResult.scoreB;
+
+    if (evalResult.scoreA > evalResult.scoreB) {
+        if (tagAEl) { tagAEl.textContent = '⭐ Draft Advantage'; tagAEl.className = 'score-advantage-tag active'; }
+        if (tagBEl) { tagBEl.textContent = 'Strategic Parity'; tagBEl.className = 'score-advantage-tag'; }
+    } else if (evalResult.scoreB > evalResult.scoreA) {
+        if (tagBEl) { tagBEl.textContent = '⭐ Draft Advantage'; tagBEl.className = 'score-advantage-tag active'; }
+        if (tagAEl) { tagAEl.textContent = 'Strategic Parity'; tagAEl.className = 'score-advantage-tag'; }
+    } else {
+        if (tagAEl) { tagAEl.textContent = 'Evenly Matched'; tagAEl.className = 'score-advantage-tag'; }
+        if (tagBEl) { tagBEl.textContent = 'Evenly Matched'; tagBEl.className = 'score-advantage-tag'; }
     }
-    if (breakdownTeamB) {
-        breakdownTeamB.innerHTML = evalB.breakdown.map(b => `<li class="${b.type}">${b.text}</li>`).join('');
+
+    // 2. Render Comparison Matrix Rows
+    const matrixContainer = document.getElementById('comparison-matrix-list');
+    if (matrixContainer) {
+        matrixContainer.innerHTML = '';
+        evalResult.categories.forEach(cat => {
+            const row = document.createElement('div');
+            row.className = 'matrix-row';
+
+            const statusA = cat.winner === 'A' 
+                ? '<span class="status-strong">Stronger in this category</span>' 
+                : (cat.winner === 'B' ? '<span class="status-weak">Weaker in this category</span>' : '<span class="status-equal">Equal</span>');
+
+            const statusB = cat.winner === 'B' 
+                ? '<span class="status-strong">Stronger in this category</span>' 
+                : (cat.winner === 'A' ? '<span class="status-weak">Weaker in this category</span>' : '<span class="status-equal">Equal</span>');
+
+            row.innerHTML = `
+                <div class="team-stat-side team-a-side ${cat.winner === 'A' ? 'highlight-side' : ''}">
+                    <span class="stat-value">${cat.statA}</span>
+                    ${statusA}
+                </div>
+                <div class="category-info-center">
+                    <span class="cat-name">${cat.name}</span>
+                    <span class="cat-desc">${cat.desc}</span>
+                </div>
+                <div class="team-stat-side team-b-side ${cat.winner === 'B' ? 'highlight-side' : ''}">
+                    <span class="stat-value">${cat.statB}</span>
+                    ${statusB}
+                </div>
+            `;
+            matrixContainer.appendChild(row);
+        });
     }
 
-    if (compPicksA) compPicksA.textContent = (draftState.picks?.A || []).map(h => h.name).join(', ') || '-';
-    if (compBansA) compBansA.textContent = (draftState.bans?.A || []).map(h => h.name).join(', ') || '-';
-    if (compLanesA) compLanesA.textContent = evalA.coveredLanes.join(', ') || 'None';
+    // 3. Render Hero Lineups
+    const picksAContainer = document.getElementById('lineup-picks-a');
+    const bansAContainer = document.getElementById('lineup-bans-a');
+    const picksBContainer = document.getElementById('lineup-picks-b');
+    const bansBContainer = document.getElementById('lineup-bans-b');
 
-    if (compPicksB) compPicksB.textContent = (draftState.picks?.B || []).map(h => h.name).join(', ') || '-';
-    if (compBansB) compBansB.textContent = (draftState.bans?.B || []).map(h => h.name).join(', ') || '-';
-    if (compLanesB) compLanesB.textContent = evalB.coveredLanes.join(', ') || 'None';
+    if (picksAContainer) picksAContainer.innerHTML = picksA.map(h => createHeroAvatarHTML(h, 'lineup-avatar')).join('');
+    if (bansAContainer) bansAContainer.innerHTML = `<span class="sub-label">Bans:</span> ` + (bansA.map(h => `<span class="lineup-ban-name">${h.name}</span>`).join(', ') || 'None');
+    if (picksBContainer) picksBContainer.innerHTML = picksB.map(h => createHeroAvatarHTML(h, 'lineup-avatar')).join('');
+    if (bansBContainer) bansBContainer.innerHTML = `<span class="sub-label">Bans:</span> ` + (bansB.map(h => `<span class="lineup-ban-name">${h.name}</span>`).join(', ') || 'None');
 
-    postDraftModal.classList.remove('hidden');
+    modal.classList.remove('hidden');
 }
 
 // =========================================================================
@@ -750,6 +851,74 @@ socket.on('draft_updated', (data) => {
         showScreen('draft-screen');
         syncDraftArenaUI(data);
     }
+});
+
+socket.on('draft_history_data', (historyList) => {
+    const container = document.getElementById('history-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!historyList || historyList.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #64748b;">
+                No completed drafts recorded in this session yet.
+            </div>
+        `;
+        return;
+    }
+
+    historyList.forEach((entry, index) => {
+        const evalResult = (typeof evaluateDraftComparison === 'function')
+            ? evaluateDraftComparison(entry.picks.A, entry.bans.A, entry.picks.B, entry.bans.B)
+            : { scoreA: 75, scoreB: 75 };
+
+        const card = document.createElement('div');
+        card.className = 'history-entry-card';
+        card.style.cssText = 'background: #111927; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;';
+
+        const timeString = new Date(entry.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; margin-bottom: 10px;">
+                <span style="font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; font-weight: 700; color: #f59e0b;">
+                    Match #${historyList.length - index} &bull; Room: ${entry.roomId} (${entry.mode.toUpperCase()})
+                </span>
+                <span style="font-size: 0.75rem; color: #64748b;">${timeString}</span>
+            </div>
+
+            <div style="display: flex; justify-content: space-around; align-items: center; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 8px; margin-bottom: 10px;">
+                <div style="text-align: center;">
+                    <div style="color: #38bdf8; font-weight: 700; font-size: 0.85rem;">TEAM A</div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: #38bdf8; font-family: 'Rajdhani';">${evalResult.scoreA}</div>
+                </div>
+                <div style="color: #f59e0b; font-weight: 800; font-size: 0.9rem;">VS</div>
+                <div style="text-align: center;">
+                    <div style="color: #f87171; font-weight: 700; font-size: 0.85rem;">TEAM B</div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: #f87171; font-family: 'Rajdhani';">${evalResult.scoreB}</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.75rem;">
+                <div>
+                    <strong style="color: #38bdf8;">Team A Picks:</strong> ${entry.picks.A.map(h => h.name).join(', ') || 'None'}<br/>
+                    <strong style="color: #64748b;">Team A Bans:</strong> ${entry.bans.A.map(h => h.name).join(', ') || 'None'}
+                </div>
+                <div>
+                    <strong style="color: #f87171;">Team B Picks:</strong> ${entry.picks.B.map(h => h.name).join(', ') || 'None'}<br/>
+                    <strong style="color: #64748b;">Team B Bans:</strong> ${entry.bans.B.map(h => h.name).join(', ') || 'None'}
+                </div>
+            </div>
+
+            <details style="margin-top: 10px; font-size: 0.75rem; color: #94a3b8; cursor: pointer;">
+                <summary style="font-weight: 600; color: #cbd5e1;">View 20-Turn Execution Order (${entry.draftLog.length} Actions)</summary>
+                <div style="margin-top: 6px; padding: 6px; background: rgba(0,0,0,0.3); border-radius: 6px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
+                    ${entry.draftLog.map(l => `<span>Turn ${l.turn} [Team ${l.team}]: ${l.action.toUpperCase()} ${l.hero}</span>`).join('')}
+                </div>
+            </details>
+        `;
+
+        container.appendChild(card);
+    });
 });
 
 socket.on('room_error', (data) => {

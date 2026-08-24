@@ -20,7 +20,10 @@
                     <span class="subtitle">Competitive Ban/Pick Simulator</span>
                 </div>
             </div>
-            <div class="nav-right">
+            <div class="nav-right" style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" id="btn-view-history" class="btn btn-sm btn-secondary" style="font-weight: 700;">
+                    📜 Draft History
+                </button>
                 <div id="connection-status" class="status-badge disconnected">
                     <span class="status-dot"></span>
                     <span class="status-label">Offline</span>
@@ -266,58 +269,87 @@
             </div>
         </div>
 
-        <!-- Post-Draft Comparison Modal -->
+        <!-- Final Post-Draft Comparison Screen Modal -->
         <div id="post-draft-modal" class="modal-overlay hidden">
-            <div class="modal-card">
-                <div class="modal-header">
-                    <div class="modal-title-wrap">
-                        <h2>Post-Draft Evaluation</h2>
-                        <span class="heuristic-tag">Draft Score — experimental heuristic</span>
+            <div class="modal-card post-draft-card">
+                <div class="modal-header text-center">
+                    <h2 class="glow-text">POST-DRAFT EVALUATION</h2>
+                    <p class="disclaimer-badge">
+                        ⚠️ Heuristic Draft Analysis &mdash; Indicates strategic profile & draft advantage, not a guaranteed match outcome.
+                    </p>
+                </div>
+
+                <!-- Overall Score Versus Header -->
+                <div class="draft-vs-score-board">
+                    <div class="team-score-block blue-side">
+                        <span class="team-name">BLUE TEAM (A)</span>
+                        <div class="score-number" id="eval-score-a">0</div>
+                        <div class="score-advantage-tag" id="advantage-tag-a"></div>
+                    </div>
+
+                    <div class="vs-divider">
+                        <span class="vs-text">VS</span>
+                        <span class="vs-sub">DRAFT SCORE</span>
+                    </div>
+
+                    <div class="team-score-block red-side">
+                        <span class="team-name">RED TEAM (B)</span>
+                        <div class="score-number" id="eval-score-b">0</div>
+                        <div class="score-advantage-tag" id="advantage-tag-b"></div>
                     </div>
                 </div>
 
-                <p class="disclaimer-text">
-                    ⚠️ <strong>Evaluation Note:</strong> This score is a heuristic analysis of lane balance and meta priority. It does <strong>not</strong> guarantee match victory.
-                </p>
-
-                <!-- Comparison Score Cards -->
-                <div class="scores-comparison-grid">
-                    <div class="team-score-card blue-card">
-                        <div class="score-team-tag">BLUE TEAM (A)</div>
-                        <div class="score-display" id="score-team-a">0</div>
-                        <div class="score-subtitle">Draft Quality Rating</div>
-                        <ul class="breakdown-list" id="breakdown-team-a"></ul>
+                <!-- Category Comparison Matrix -->
+                <div class="comparison-matrix-container">
+                    <div class="matrix-header-row">
+                        <span class="col-team">Team A</span>
+                        <span class="col-cat">Evaluation Category</span>
+                        <span class="col-team">Team B</span>
                     </div>
-
-                    <div class="team-score-card red-card">
-                        <div class="score-team-tag">RED TEAM (B)</div>
-                        <div class="score-display" id="score-team-b">0</div>
-                        <div class="score-subtitle">Draft Quality Rating</div>
-                        <ul class="breakdown-list" id="breakdown-team-b"></ul>
+                    <div class="matrix-rows-list" id="comparison-matrix-list">
+                        <!-- Dynamically populated via main.js -->
                     </div>
                 </div>
 
-                <!-- Lineup Details -->
-                <div class="summary-details">
-                    <h3>Composition Analysis</h3>
-                    <div class="comp-table-grid">
-                        <div class="comp-col blue-comp">
-                            <h4>Blue Team</h4>
-                            <p><strong>Picks:</strong> <span id="comp-picks-a">-</span></p>
-                            <p><strong>Bans:</strong> <span id="comp-bans-a">-</span></p>
-                            <p><strong>Covered Lanes:</strong> <span id="comp-lanes-a">-</span></p>
-                        </div>
-                        <div class="comp-col red-comp">
-                            <h4>Red Team</h4>
-                            <p><strong>Picks:</strong> <span id="comp-picks-b">-</span></p>
-                            <p><strong>Bans:</strong> <span id="comp-bans-b">-</span></p>
-                            <p><strong>Covered Lanes:</strong> <span id="comp-lanes-b">-</span></p>
-                        </div>
+                <!-- Lineup Summary Section -->
+                <div class="lineup-summary-grid">
+                    <div class="lineup-col blue-side">
+                        <h4>Blue Team Draft Lineup</h4>
+                        <div class="lineup-picks" id="lineup-picks-a"></div>
+                        <div class="lineup-bans" id="lineup-bans-a"></div>
+                    </div>
+                    <div class="lineup-col red-side">
+                        <h4>Red Team Draft Lineup</h4>
+                        <div class="lineup-picks" id="lineup-picks-b"></div>
+                        <div class="lineup-bans" id="lineup-bans-b"></div>
                     </div>
                 </div>
 
-                <div class="modal-actions">
-                    <button id="btn-close-modal" class="btn btn-gold">Review Draft Board</button>
+                <!-- Post-Draft Action Bar -->
+                <div class="modal-actions-dual" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 16px;">
+                    <button type="button" id="btn-rematch" class="btn btn-gold">🔄 Rematch</button>
+                    <button type="button" id="btn-new-draft" class="btn btn-secondary">⚡ New Draft</button>
+                    <button type="button" id="btn-return-lobby" class="btn btn-outline-danger">🏠 Return to Lobby</button>
+                    <button type="button" id="btn-close-modal" class="btn btn-secondary">👁️ Review Board</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DRAFT HISTORY MODAL (TEMPORARY IN-MEMORY) -->
+        <div id="history-modal" class="modal-overlay hidden">
+            <div class="modal-card post-draft-card">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 class="glow-text">DRAFT HISTORY ARCHIVE</h2>
+                        <p style="font-size: 0.75rem; color: #94a3b8; margin: 4px 0 0 0;">
+                            ℹ️ <strong>Temporary Storage:</strong> Records are stored in memory and reset whenever the server restarts.
+                        </p>
+                    </div>
+                    <button type="button" id="btn-close-history" class="btn btn-sm btn-secondary">✕ Close</button>
+                </div>
+
+                <div id="history-list-container" class="history-list-container" style="max-height: 60vh; overflow-y: auto; margin: 16px 0; display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Rendered by main.js -->
                 </div>
             </div>
         </div>

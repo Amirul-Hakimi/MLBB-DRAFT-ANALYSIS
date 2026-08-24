@@ -149,3 +149,152 @@ function evaluateTeamDraft(picks) {
         coveredLanes: Array.from(coveredLanes)
     };
 }
+
+/**
+ * 8-Category Comparative Draft Evaluator
+ * Evaluates Team A vs Team B across structural heuristics without declaring a definitive winner.
+ */
+function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
+    const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
+
+    // Helper: Damage distribution analysis
+    function getDamageProfile(picks) {
+        let magic = 0, physical = 0;
+        picks.forEach(hero => {
+            const classes = (typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []);
+            if (classes.includes('Mage')) magic += 1.5;
+            if (classes.includes('Support')) magic += 0.5;
+            if (classes.includes('Marksman') || classes.includes('Assassin')) physical += 1.5;
+            if (classes.includes('Fighter')) physical += 1.0;
+        });
+        const isBalanced = magic >= 1.5 && physical >= 2.0;
+        return { magic, physical, isBalanced };
+    }
+
+    // Helper: Power curve spike counts
+    function getPowerCurve(picks) {
+        let early = 0, mid = 0, late = 0;
+        picks.forEach(h => {
+            if (h.powerSpike === 'Early') early++;
+            else if (h.powerSpike === 'Late') late++;
+            else mid++;
+        });
+        return { early, mid, late };
+    }
+
+    // 1. Lane Coverage
+    const lanesA = new Set(picksA.flatMap(h => (typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])));
+    const lanesB = new Set(picksB.flatMap(h => (typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])));
+    const laneCountA = ALL_LANES.filter(l => lanesA.has(l)).length;
+    const laneCountB = ALL_LANES.filter(l => lanesB.has(l)).length;
+
+    // 2. Meta Strength (Average Win Rate)
+    const avgWinRateA = picksA.length ? picksA.reduce((sum, h) => sum + (h.winRate || 50), 0) / picksA.length : 50;
+    const avgWinRateB = picksB.length ? picksB.reduce((sum, h) => sum + (h.winRate || 50), 0) / picksB.length : 50;
+
+    // 3. Role Balance (Class Diversity)
+    const classesA = new Set(picksA.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
+    const classesB = new Set(picksB.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
+    const classCountA = classesA.size;
+    const classCountB = classesB.size;
+
+    // 4. Damage Type Diversity
+    const dmgA = getDamageProfile(picksA);
+    const dmgB = getDamageProfile(picksB);
+
+    // 5. Engage / Utility (Tank + Support count)
+    const engageCountA = picksA.filter(h => {
+        const c = (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
+        return c.includes('Tank') || c.includes('Support');
+    }).length;
+    const engageCountB = picksB.filter(h => {
+        const c = (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
+        return c.includes('Tank') || c.includes('Support');
+    }).length;
+
+    // 6. Flexibility (Multi-lane flex heroes)
+    const flexCountA = picksA.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
+    const flexCountB = picksB.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
+
+    // 7. Power Curve Stability
+    const curveA = getPowerCurve(picksA);
+    const curveB = getPowerCurve(picksB);
+    const curveScoreA = (curveA.early >= 1 ? 1 : 0) + (curveA.mid >= 1 ? 1 : 0) + (curveA.late >= 1 ? 1 : 0);
+    const curveScoreB = (curveB.early >= 1 ? 1 : 0) + (curveB.mid >= 1 ? 1 : 0) + (curveB.late >= 1 ? 1 : 0);
+
+    // 8. Ban Efficiency (Total Ban Rate of Banned Targets)
+    const banEffA = bansA.reduce((sum, h) => sum + (h.banRate || 0), 0);
+    const banEffB = bansB.reduce((sum, h) => sum + (h.banRate || 0), 0);
+
+    // Compute Overall Scores (Out of 100)
+    let scoreA = Math.round((laneCountA * 6) + (avgWinRateA * 0.7) + (classCountA * 3) + (dmgA.isBalanced ? 10 : 4) + (engageCountA >= 1 ? 8 : 2) + (flexCountA * 2) + (curveScoreA * 3));
+    let scoreB = Math.round((laneCountB * 6) + (avgWinRateB * 0.7) + (classCountB * 3) + (dmgB.isBalanced ? 10 : 4) + (engageCountB >= 1 ? 8 : 2) + (flexCountB * 2) + (curveScoreB * 3));
+    scoreA = Math.min(100, Math.max(30, scoreA));
+    scoreB = Math.min(100, Math.max(30, scoreB));
+
+    // Comparative Items Definition
+    const categories = [
+        {
+            name: "Lane Coverage",
+            desc: "Map position coverage across EXP, Jungle, Mid, Gold, and Roam",
+            statA: `${laneCountA}/5 Covered`,
+            statB: `${laneCountB}/5 Covered`,
+            winner: laneCountA > laneCountB ? 'A' : (laneCountB > laneCountA ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Meta Strength",
+            desc: "Average baseline win rate across locked heroes",
+            statA: `${avgWinRateA.toFixed(1)}% WR`,
+            statB: `${avgWinRateB.toFixed(1)}% WR`,
+            winner: avgWinRateA > avgWinRateB + 0.2 ? 'A' : (avgWinRateB > avgWinRateA + 0.2 ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Role Balance",
+            desc: "Distribution across standard MLBB combat classes",
+            statA: `${classCountA} Classes`,
+            statB: `${classCountB} Classes`,
+            winner: classCountA > classCountB ? 'A' : (classCountB > classCountA ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Damage Type",
+            desc: "Hybrid split of physical burst and continuous magic power",
+            statA: dmgA.isBalanced ? "Balanced Split" : "Heavy Biased",
+            statB: dmgB.isBalanced ? "Balanced Split" : "Heavy Biased",
+            winner: dmgA.isBalanced && !dmgB.isBalanced ? 'A' : (dmgB.isBalanced && !dmgA.isBalanced ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Engage / Utility",
+            desc: "Crowd control frontline and supportive sustain capacity",
+            statA: `${engageCountA} Utility/Tank`,
+            statB: `${engageCountB} Utility/Tank`,
+            winner: engageCountA > engageCountB ? 'A' : (engageCountB > engageCountA ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Flexibility",
+            desc: "Lineup flex capacity to adapt lanes and counter-play",
+            statA: `${flexCountA} Flex Heroes`,
+            statB: `${flexCountB} Flex Heroes`,
+            winner: flexCountA > flexCountB ? 'A' : (flexCountB > flexCountA ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Power Curve",
+            desc: "Game pacing from early objective pressure to late scaling",
+            statA: `${curveA.early}E / ${curveA.mid}M / ${curveA.late}L`,
+            statB: `${curveB.early}E / ${curveB.mid}M / ${curveB.late}L`,
+            winner: curveScoreA > curveScoreB ? 'A' : (curveScoreB > curveScoreA ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Ban Efficiency",
+            desc: "Priority threats eliminated during ban turns",
+            statA: `${banEffA.toFixed(0)}% Threat Ban`,
+            statB: `${banEffB.toFixed(0)}% Threat Ban`,
+            winner: banEffA > banEffB + 2 ? 'A' : (banEffB > banEffA + 2 ? 'B' : 'EQUAL')
+        }
+    ];
+
+    return { scoreA, scoreB, categories };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { evaluateDraftComparison, evaluateTeamDraft, DRAFT_SEQUENCE };
+}
