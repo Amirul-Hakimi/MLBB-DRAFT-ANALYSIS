@@ -31,79 +31,96 @@
             </div>
         </header>
 
-        <!-- 1. HOME SCREEN: MATCH SETUP -->
+        <!-- 1. HOME SCREEN: MSC TOURNAMENT STAGE -->
         <main id="setup-screen" class="screen active">
-            <div class="hero-header">
-                <h1 class="glow-text">TOURNAMENT DRAFT SIMULATOR</h1>
-                <p>Rehearse competitive strategies, simulate AI lineups, or compete live head-to-head.</p>
-            </div>
-
-            <div class="card setup-card">
-                <div class="card-header">
-                    <h2>Select Match Mode</h2>
-                    <p class="card-desc">Choose how you want to conduct the ban/pick phase</p>
-                </div>
-                
-                <div class="mode-grid">
-                    <button id="btn-mode-ai" class="mode-card active">
-                        <div class="mode-icon">🤖</div>
-                        <div class="mode-info">
-                            <span class="mode-title">Vs AI Practice</span>
-                            <span class="mode-desc">Solo practice against smart AI</span>
+            <div class="setup-layout-container">
+                <!-- Left Column: Centered Large Logo & Title -->
+                <div class="setup-brand-hero">
+                    <div class="hero-brand-copy">
+                        <div class="logo-frame">
+                            <img src="/assets/heroes/mlbb-logo-new.png" 
+                                 alt="Mobile Legends: Bang Bang" 
+                                 class="setup-main-logo"
+                                 onerror="this.onerror=null; this.src='/assets/mlbb-logo.png'; this.src='https://cdn.jsdelivr.net/gh/fshangala/mlbb-heroes-dataset@master/images/change.png';" />
                         </div>
-                    </button>
 
-                    <button id="btn-mode-sim" class="mode-card">
-                        <div class="mode-icon">⚡</div>
-                        <div class="mode-info">
-                            <span class="mode-title">Auto-Sim (AI vs AI)</span>
-                            <span class="mode-desc">Observe simulated drafts</span>
-                        </div>
-                    </button>
-
-                    <button id="btn-mode-create" class="mode-card">
-                        <div class="mode-icon">🛡️</div>
-                        <div class="mode-info">
-                            <span class="mode-title">Create PvP Lobby</span>
-                            <span class="mode-desc">Host room for 2 players</span>
-                        </div>
-                    </button>
-
-                    <button id="btn-mode-join" class="mode-card">
-                        <div class="mode-icon">⚔️</div>
-                        <div class="mode-info">
-                            <span class="mode-title">Join PvP Lobby</span>
-                            <span class="mode-desc">Enter room code to join</span>
-                        </div>
-                    </button>
-                </div>
-
-                <div id="join-input-group" class="input-group hidden">
-                    <label for="room-id-input">Room Code</label>
-                    <input type="text" id="room-id-input" placeholder="e.g. A3K9M2" maxlength="6" autocomplete="off" autocapitalize="characters">
-                </div>
-
-                <!-- Royalty-Free Lobby Ambient Player -->
-                <div class="card music-player-card" style="margin-top: 14px; background: #0f172a; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span>🎵</span>
-                        <span style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Lobby Music:</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <select id="music-track-select" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 6px;">
-                            <option value="none">Mute</option>
-                            <option value="track1" selected>Lo-Fi Arena</option>
-                            <option value="track2">Synthwave Drive</option>
-                        </select>
-                        <button type="button" id="btn-toggle-music" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 8px;">▶ Play</button>
-                        <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3" style="width: 60px; accent-color: #f59e0b;">
+                        <h1 class="glow-text-gold">COMPETITIVE DRAFT PICK</h1>
+                        <p class="hero-tagline">
+                            Draft like the pros. Rehearse tournament lineups and challenge opponents live in real-time.
+                        </p>
                     </div>
                 </div>
 
-                <button id="btn-enter-room" class="btn btn-gold btn-large" style="margin-top: 14px;">
-                    <span>Enter Lobby</span>
-                    <span class="btn-arrow">→</span>
-                </button>
+                <!-- Right Column: Match Configuration Card -->
+                <div class="setup-card-wrapper">
+                    <div class="card setup-card setup-card-right">
+                        <div class="card-header">
+                            <h2>Select Match Mode</h2>
+                            <p class="card-desc">Choose how you want to conduct the ban/pick phase</p>
+                        </div>
+                        
+                        <div class="mode-grid">
+                            <button id="btn-mode-ai" class="mode-card active">
+                                <div class="mode-icon">🤖</div>
+                                <div class="mode-info">
+                                    <span class="mode-title">Vs AI Practice</span>
+                                    <span class="mode-desc">Solo practice against smart AI</span>
+                                </div>
+                            </button>
+
+                            <button id="btn-mode-sim" class="mode-card">
+                                <div class="mode-icon">⚡</div>
+                                <div class="mode-info">
+                                    <span class="mode-title">AI vs AI</span>
+                                    <span class="mode-desc">Observe simulated drafts</span>
+                                </div>
+                            </button>
+
+                            <button id="btn-mode-create" class="mode-card">
+                                <div class="mode-icon">🛡️</div>
+                                <div class="mode-info">
+                                    <span class="mode-title">Create PvP Lobby</span>
+                                    <span class="mode-desc">Host room for 2 players</span>
+                                </div>
+                            </button>
+
+                            <button id="btn-mode-join" class="mode-card">
+                                <div class="mode-icon">⚔️</div>
+                                <div class="mode-info">
+                                    <span class="mode-title">Join PvP Lobby</span>
+                                    <span class="mode-desc">Enter room code to join</span>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div id="join-input-group" class="input-group hidden">
+                            <label for="room-id-input">Room Code</label>
+                            <input type="text" id="room-id-input" placeholder="e.g. A3K9M2" maxlength="6" autocomplete="off" autocapitalize="characters">
+                        </div>
+
+                        <!-- Ambient Sound Dock -->
+                        <div class="card music-player-card" style="margin-top: 14px; background: rgba(11, 19, 43, 0.7); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>🎵</span>
+                                <span style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Lobby Music:</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <select id="music-track-select" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 6px;">
+                                    <option value="none">Mute</option>
+                                    <option value="track1" selected>Lo-Fi Arena</option>
+                                    <option value="track2">Synthwave Drive</option>
+                                </select>
+                                <button type="button" id="btn-toggle-music" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 8px;">▶ Play</button>
+                                <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3" style="width: 60px; accent-color: #f59e0b;">
+                            </div>
+                        </div>
+
+                        <button id="btn-enter-room" class="btn btn-gold btn-large" style="margin-top: 14px;">
+                            <span>Enter Lobby</span>
+                            <span class="btn-arrow">→</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </main>
 
@@ -155,7 +172,6 @@
 
         <!-- 3. DRAFT ARENA SCREEN -->
         <section id="draft-screen" class="screen hidden">
-            
             <div id="sim-control-bar" class="sim-toolbar hidden">
                 <div class="sim-label">
                     <span class="sim-indicator"></span>

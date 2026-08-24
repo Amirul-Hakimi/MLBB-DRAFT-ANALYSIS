@@ -2434,3 +2434,259 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* =========================================================================
+   MPL TOURNAMENT BACKGROUND & SPLIT-HERO LANDING STYLES
+========================================================================= */
+
+/* Deep Obsidian & Gold Esports Atmosphere (Replaces plain blue background) */
+body {
+    background: radial-gradient(circle at 20% 30%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(239, 68, 68, 0.06) 0%, transparent 45%),
+                linear-gradient(135deg, #070a12 0%, #0b1120 50%, #05070d 100%) !important;
+    background-attachment: fixed;
+}
+
+/* Two-Column Stage Container */
+.setup-layout-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 0 20px;
+    min-height: calc(80vh - 80px);
+}
+
+/* Left Hero Brand Section */
+.setup-brand-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    text-align: left;
+}
+
+.logo-glow-backdrop {
+    position: absolute;
+    width: 320px;
+    height: 320px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, rgba(239, 68, 68, 0.08) 50%, transparent 70%);
+    top: -40px;
+    left: -40px;
+    z-index: 0;
+    filter: blur(35px);
+    pointer-events: none;
+}
+
+.setup-main-logo {
+    position: relative;
+    z-index: 1;
+    max-width: 340px;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 0 25px rgba(245, 158, 11, 0.45));
+    margin-bottom: 24px;
+    animation: gentle-float 4s ease-in-out infinite alternate;
+}
+
+.mpl-trophy-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #f59e0b;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.glow-text-gold {
+    font-family: var(--font-heading, 'Rajdhani', sans-serif);
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 1.5px;
+    line-height: 1.1;
+    margin: 0 0 14px 0;
+    text-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
+}
+
+.hero-tagline {
+    font-size: 0.95rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    max-width: 440px;
+    margin: 0;
+}
+
+/* Right Card Styling */
+.setup-card-right {
+    background: rgba(13, 20, 36, 0.85) !important;
+    border: 1px solid rgba(245, 158, 11, 0.25) !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(245, 158, 11, 0.03) !important;
+    backdrop-filter: blur(12px);
+    width: 100%;
+    margin: 0 auto;
+}
+
+@keyframes gentle-float {
+    0% { transform: translateY(0px); }
+    100% { transform: translateY(-8px); }
+}
+
+/* Mobile & Tablet Responsiveness */
+@media (max-width: 900px) {
+    .setup-layout-container {
+        grid-template-columns: 1fr;
+        gap: 28px;
+        margin: 20px auto;
+    }
+    
+    .setup-brand-hero {
+        align-items: center;
+        text-align: center;
+    }
+
+    .setup-main-logo {
+        max-width: 240px;
+    }
+
+    .hero-tagline {
+        max-width: 100%;
+    }
+}
+
+/* =========================================================================
+   MSC / ESPORTS WORLD CUP SPLIT TOURNAMENT THEME (ENLARGED & CENTERED HERO)
+========================================================================= */
+
+body {
+    background-color: #060913 !important;
+    background-image: 
+        radial-gradient(circle at 15% 30%, rgba(14, 85, 203, 0.25) 0%, transparent 45%),
+        radial-gradient(circle at 85% 70%, rgba(220, 20, 60, 0.22) 0%, transparent 45%),
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(135deg, #070c1a 0%, #0c1222 50%, #120914 100%) !important;
+    background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px, 100% 100% !important;
+    background-attachment: fixed;
+}
+
+/* Split-Stage Two-Column Layout */
+.setup-layout-container {
+    display: grid;
+    grid-template-columns: 1.15fr 0.95fr;
+    align-items: center;
+    justify-content: space-between;
+    gap: 48px;
+    max-width: 1240px;
+    margin: 30px auto 0 auto;
+    padding: 0 32px;
+    min-height: calc(85vh - 70px);
+}
+
+/* Left Brand Column (Centered content) */
+.setup-brand-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+}
+
+.hero-brand-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Enlarged Centered Logo Frame */
+.logo-frame {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 460px;
+    margin: 0 auto 16px auto;
+    animation: gentle-float 4s ease-in-out infinite alternate;
+}
+
+.setup-main-logo {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 30px rgba(245, 158, 11, 0.55)) drop-shadow(0 10px 20px rgba(0, 0, 0, 0.8));
+}
+
+.glow-text-gold {
+    font-family: var(--font-heading, 'Rajdhani', sans-serif);
+    font-size: 2.9rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 2px;
+    line-height: 1.05;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    text-shadow: 0 0 25px rgba(245, 158, 11, 0.45);
+}
+
+.hero-tagline {
+    font-size: 0.95rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    max-width: 440px;
+    margin: 0 auto;
+}
+
+/* Right Setup Card Wrapper */
+.setup-card-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.setup-card-right {
+    width: 100%;
+    max-width: 520px;
+    background: rgba(10, 16, 30, 0.88) !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    border-top: 3px solid #38bdf8 !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75), inset 0 0 25px rgba(56, 189, 248, 0.04) !important;
+    backdrop-filter: blur(14px);
+    border-radius: 12px;
+    padding: 24px !important;
+}
+
+@keyframes gentle-float {
+    0% { transform: translateY(0px); }
+    100% { transform: translateY(-7px); }
+}
+
+@media (max-width: 992px) {
+    .setup-layout-container {
+        grid-template-columns: 1fr;
+        gap: 32px;
+        padding: 0 16px;
+    }
+    .setup-card-wrapper {
+        justify-content: center;
+    }
+    .logo-frame {
+        max-width: 320px;
+    }
+    .glow-text-gold {
+        font-size: 2.2rem;
+    }
+}
