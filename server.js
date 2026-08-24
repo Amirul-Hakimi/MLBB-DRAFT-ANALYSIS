@@ -14,9 +14,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Configuration Constants
 const AI_DECISION_DELAY_MS = 1000;
 const SIM_AUTO_INTERVAL_MS = 1000;
-const PVP_DISCONNECT_TIMEOUT_MS = 30000; // 30s reconnect window
-const ROOM_INACTIVITY_EXPIRY_MS = 30 * 60 * 1000; // 30m idle TTL
-const EMPTY_ROOM_EXPIRY_MS = 60 * 1000; // 60s cleanup if empty
+const TURN_TIMEOUT_SECONDS = 30; // Authoritative 30s turn limit
+const PVP_DISCONNECT_TIMEOUT_MS = 30000;
+const ROOM_INACTIVITY_EXPIRY_MS = 30 * 60 * 1000;
+const EMPTY_ROOM_EXPIRY_MS = 60 * 1000;
 
 // 20-Step Draft Sequence Rules
 const DRAFT_SEQUENCE = [
@@ -45,13 +46,8 @@ const DRAFT_SEQUENCE = [
     { turn: 20, phase: 'Pick Phase 2', action: 'pick', team: 'B' }
 ];
 
-// In-Memory State Storage
 const activeRooms = {};
 const temporaryDraftHistory = [];
-
-// =========================================================================
-// UTILITIES & FACTORY HELPERS
-// =========================================================================
 
 function sanitizeString(input, maxLen = 20) {
     if (typeof input !== 'string') return '';
@@ -76,6 +72,8 @@ function createFreshDraftState(currentVersion = 1) {
         currentTurnIndex: 0,
         isComplete: false,
         started: false,
+        turnStartedAt: null,
+        turnExpiresAt: null,
         bans: { A: [], B: [] },
         picks: { A: [], B: [] },
         draftLog: []
@@ -87,6 +85,17 @@ function getRoomPlayersSummary(room) {
         A: room.players.A ? { connected: !!room.players.A.connected, ready: !!room.players.A.ready } : null,
         B: room.players.B ? { connected: !!room.players.B.connected, ready: !!room.players.B.ready } : null
     };
+}
+
+function getOpenLanesForTeam(picks) {
+    const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
+    const filledLanes = new Set();
+    picks.forEach(hero => {
+        if (!hero) return;
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+        lanes.forEach(l => filledLanes.add(l));
+    });
+    return ALL_LANES.filter(l => !filledLanes.has(l));
 }
 
 function recordCompletedDraft(room) {
@@ -119,10 +128,31 @@ function destroyRoom(roomId, reason = 'Room closed.') {
     if (room.simInterval) clearInterval(room.simInterval);
     if (room.aiTimer) clearTimeout(room.aiTimer);
     if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+    if (room.turnTimer) clearTimeout(room.turnTimer);
 
     io.to(roomId).emit('room_dismissed', { message: reason });
     delete activeRooms[roomId];
-    console.log(`[ROOM PURGED] ${roomId} — Reason: ${reason}`);
+}
+
+// Server-Authoritative Turn Timer Generator
+function startServerTurnTimer(roomId) {
+    const room = activeRooms[roomId];
+    if (!room || !room.draftState || !room.draftState.started || room.draftState.isComplete) return;
+
+    if (room.turnTimer) {
+        clearTimeout(room.turnTimer);
+        room.turnTimer = null;
+    }
+
+    if (room.mode === 'auto_sim') return;
+
+    const now = Date.now();
+    room.draftState.turnStartedAt = now;
+    room.draftState.turnExpiresAt = now + (TURN_TIMEOUT_SECONDS * 1000);
+
+    room.turnTimer = setTimeout(() => {
+        handleTurnTimeout(roomId);
+    }, TURN_TIMEOUT_SECONDS * 1000);
 }
 
 function performRoomReset(room, roomId) {
@@ -130,14 +160,9 @@ function performRoomReset(room, roomId) {
     room.generationId = (room.generationId || 1) + 1;
     room.pendingResetBy = null;
 
-    if (room.simInterval) {
-        clearInterval(room.simInterval);
-        room.simInterval = null;
-    }
-    if (room.aiTimer) {
-        clearTimeout(room.aiTimer);
-        room.aiTimer = null;
-    }
+    if (room.simInterval) { clearInterval(room.simInterval); room.simInterval = null; }
+    if (room.aiTimer) { clearTimeout(room.aiTimer); room.aiTimer = null; }
+    if (room.turnTimer) { clearTimeout(room.turnTimer); room.turnTimer = null; }
 
     const nextVersion = ((room.draftState && room.draftState.version) || 0) + 10;
     room.draftState = createFreshDraftState(nextVersion);
@@ -150,6 +175,7 @@ function performRoomReset(room, roomId) {
     } else {
         room.status = 'drafting';
         room.draftState.started = true;
+        startServerTurnTimer(roomId);
     }
 
     io.to(roomId).emit('draft_updated', {
@@ -161,10 +187,6 @@ function performRoomReset(room, roomId) {
         isReset: true
     });
 }
-
-// =========================================================================
-// AI ENGINE DECISION LOGIC
-// =========================================================================
 
 function selectWeightedRandomHero(heroList, weightCalculator) {
     if (!heroList || heroList.length === 0) return null;
@@ -183,45 +205,130 @@ function computeAIMoveForTeam(draftState, activeTeam) {
     const currentTurn = DRAFT_SEQUENCE[draftState.currentTurnIndex];
     if (!currentTurn) return null;
 
-    const allBannedIds = [...draftState.bans.A, ...draftState.bans.B].map(h => h.id);
-    const allPickedIds = [...draftState.picks.A, ...draftState.picks.B].map(h => h.id);
+    const allBannedIds = [...draftState.bans.A, ...draftState.bans.B].filter(Boolean).map(h => h.id);
+    const allPickedIds = [...draftState.picks.A, ...draftState.picks.B].filter(Boolean).map(h => h.id);
     const availableHeroes = HERO_DATASET.filter(h => !allBannedIds.includes(h.id) && !allPickedIds.includes(h.id));
 
     if (availableHeroes.length === 0) return null;
 
+    const opponentTeam = activeTeam === 'A' ? 'B' : 'A';
+    const myOpenLanes = getOpenLanesForTeam(draftState.picks[activeTeam]);
+    const opponentOpenLanes = getOpenLanesForTeam(draftState.picks[opponentTeam]);
+
+    // 1. AI BANNING: Deny the OPPONENT'S remaining open lanes
     if (currentTurn.action === 'ban') {
-        return selectWeightedRandomHero(availableHeroes, h => getHeroBanRate(h));
+        let banCandidates = availableHeroes;
+
+        // If opponent has already locked in some positions, restrict bans ONLY to heroes who can play in their OPEN lanes
+        if (opponentOpenLanes.length > 0 && opponentOpenLanes.length < 5) {
+            const denialCandidates = availableHeroes.filter(hero => {
+                const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+                return lanes.some(lane => opponentOpenLanes.includes(lane));
+            });
+            if (denialCandidates.length > 0) {
+                banCandidates = denialCandidates;
+            }
+        }
+
+        return selectWeightedRandomHero(banCandidates, h => getHeroBanRate(h));
     }
 
-    const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
-    const teamCoveredLanes = new Set();
-    draftState.picks[activeTeam].forEach(hero => {
-        getHeroLanes(hero).forEach(l => teamCoveredLanes.add(l));
-    });
-    const neededLanes = ALL_LANES.filter(l => !teamCoveredLanes.has(l));
-
-    let candidateHeroes = availableHeroes;
-    if (neededLanes.length > 0) {
+    // 2. AI PICKING: Fill the AI'S OWN open lanes
+    let pickCandidates = availableHeroes;
+    if (myOpenLanes.length > 0) {
         const laneCandidates = availableHeroes.filter(hero => {
-            const lanes = getHeroLanes(hero);
-            return lanes.some(lane => neededLanes.includes(lane));
+            const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+            return lanes.some(lane => myOpenLanes.includes(lane));
         });
-        if (laneCandidates.length > 0) candidateHeroes = laneCandidates;
+        if (laneCandidates.length > 0) {
+            pickCandidates = laneCandidates;
+        }
     }
 
-    return selectWeightedRandomHero(candidateHeroes, h => {
-        if (neededLanes.length > 0) {
-            const matchedLane = neededLanes.find(l => h.roles && h.roles[l]);
+    return selectWeightedRandomHero(pickCandidates, h => {
+        if (myOpenLanes.length > 0) {
+            const matchedLane = myOpenLanes.find(l => h.roles && h.roles[l]);
             if (matchedLane) return h.roles[matchedLane].pickRate;
         }
         return getHeroPickRate(h);
     });
 }
 
+function handleTurnTimeout(roomId) {
+    const room = activeRooms[roomId];
+    if (!room || !room.draftState || !room.draftState.started || room.draftState.isComplete) return;
+
+    if (room.turnTimer) {
+        clearTimeout(room.turnTimer);
+        room.turnTimer = null;
+    }
+
+    const draft = room.draftState;
+    const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
+    if (!currentTurn) return;
+
+    room.lastActivity = Date.now();
+
+    // Inside handleTurnTimeout(roomId) in server.js
+    if (currentTurn.action === 'ban') {
+        // Push a placeholder object so ban array length stays exact
+        const skippedBanObj = { id: 'skipped', name: 'Skipped', isSkipped: true };
+        draft.bans[currentTurn.team].push(skippedBanObj);
+
+        draft.draftLog.push({
+            turn: currentTurn.turn,
+            phase: currentTurn.phase,
+            team: currentTurn.team,
+            action: 'ban (skipped)',
+            hero: 'None (Timeout)'
+        });
+    } else {
+        // Auto-pick
+        const autoHero = computeAIMoveForTeam(draft, currentTurn.team);
+        if (autoHero) {
+            draft.picks[currentTurn.team].push(autoHero);
+            draft.draftLog.push({
+                turn: currentTurn.turn,
+                phase: currentTurn.phase,
+                team: currentTurn.team,
+                action: 'pick (auto)',
+                hero: autoHero.name
+            });
+        }
+    }
+
+    draft.currentTurnIndex++;
+    draft.version = (draft.version || 0) + 1;
+
+    if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
+        draft.isComplete = true;
+        room.status = 'completed';
+        recordCompletedDraft(room);
+    } else {
+        startServerTurnTimer(roomId);
+    }
+
+    io.to(roomId).emit('draft_updated', {
+        roomId: roomId,
+        draftState: draft,
+        status: room.status,
+        mode: room.mode,
+        players: getRoomPlayersSummary(room)
+    });
+
+    processAITurnIfNecessary(roomId);
+}
+
 function executeDraftStep(roomId) {
     const room = activeRooms[roomId];
     if (!room) return false;
     room.lastActivity = Date.now();
+
+    if (room.turnTimer) {
+        clearTimeout(room.turnTimer);
+        room.turnTimer = null;
+    }
+
     const draft = room.draftState;
     if (draft.isComplete || draft.currentTurnIndex >= DRAFT_SEQUENCE.length) return false;
 
@@ -254,6 +361,8 @@ function executeDraftStep(roomId) {
             room.simInterval = null;
         }
         recordCompletedDraft(room);
+    } else {
+        startServerTurnTimer(roomId);
     }
 
     io.to(roomId).emit('draft_updated', {
@@ -287,9 +396,7 @@ function processAITurnIfNecessary(roomId) {
     }
 }
 
-// =========================================================================
-// SCHEDULED GARBAGE COLLECTION (INACTIVITY CLEANUP)
-// =========================================================================
+// Scheduled Inactivity Sweep
 setInterval(() => {
     const now = Date.now();
     Object.keys(activeRooms).forEach(roomId => {
@@ -305,22 +412,14 @@ setInterval(() => {
     });
 }, 60000);
 
-// =========================================================================
-// SOCKET CONNECTION & EVENT HANDLERS
-// =========================================================================
-
+// Sockets
 io.on('connection', (socket) => {
     function sendClientError(message, eventName = 'app_error') {
         socket.emit(eventName, { message });
     }
 
-    // 1. CREATE ROOM
     socket.on('create_room', (payload) => {
         try {
-            if (!payload || typeof payload !== 'object') {
-                return sendClientError('Invalid room creation payload.', 'room_error');
-            }
-
             const playerToken = sanitizeString(payload.playerToken, 32);
             const mode = ['pvp', 'vs_ai', 'auto_sim'].includes(payload.mode) ? payload.mode : 'vs_ai';
             const roomId = generateUniqueRoomId();
@@ -334,6 +433,7 @@ io.on('connection', (socket) => {
                 generationId: 1,
                 pendingResetBy: null,
                 cleanupTimer: null,
+                turnTimer: null,
                 players: {
                     A: mode === 'auto_sim'
                         ? { socketId: 'AI_A', playerToken: 'AI_A', connected: true, ready: true }
@@ -350,6 +450,7 @@ io.on('connection', (socket) => {
 
             if (mode !== 'pvp') {
                 activeRooms[roomId].draftState.started = true;
+                startServerTurnTimer(roomId);
             }
 
             socket.join(roomId);
@@ -357,7 +458,6 @@ io.on('connection', (socket) => {
             socket.assignedTeam = mode === 'auto_sim' ? 'SPEC' : 'A';
             socket.playerToken = playerToken;
 
-            // Direct emission to creator (Prevents redundant broadcast)
             socket.emit('room_created', {
                 roomId: roomId,
                 yourTeam: socket.assignedTeam,
@@ -366,20 +466,13 @@ io.on('connection', (socket) => {
                 draftState: activeRooms[roomId].draftState,
                 players: getRoomPlayersSummary(activeRooms[roomId])
             });
-
         } catch (err) {
-            console.error(`[CREATE_ROOM ERROR] Socket ${socket.id}:`, err);
             sendClientError('Failed to create match room.', 'room_error');
         }
     });
 
-    // 2. JOIN ROOM
     socket.on('join_room', (payload) => {
         try {
-            if (!payload || typeof payload !== 'object') {
-                return sendClientError('Invalid room join request.', 'room_error');
-            }
-
             const cleanRoomId = sanitizeString(payload.targetRoomId, 6).toUpperCase();
             const playerToken = sanitizeString(payload.playerToken, 32);
             const room = activeRooms[cleanRoomId];
@@ -390,13 +483,11 @@ io.on('connection', (socket) => {
 
             room.lastActivity = Date.now();
 
-            // Reconnect Auto-Sim Spectator
             if (room.mode === 'auto_sim') {
                 socket.join(cleanRoomId);
                 socket.currentRoomId = cleanRoomId;
                 socket.assignedTeam = 'SPEC';
                 socket.playerToken = playerToken;
-
                 socket.emit('room_joined', {
                     roomId: cleanRoomId,
                     yourTeam: 'SPEC',
@@ -408,17 +499,12 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Seat Resumption for Existing Players
             let existingTeam = null;
             if (room.players.A && room.players.A.playerToken === playerToken) existingTeam = 'A';
             if (room.players.B && room.players.B.playerToken === playerToken) existingTeam = 'B';
 
             if (existingTeam) {
-                if (room.cleanupTimer) {
-                    clearTimeout(room.cleanupTimer);
-                    room.cleanupTimer = null;
-                }
-
+                if (room.cleanupTimer) { clearTimeout(room.cleanupTimer); room.cleanupTimer = null; }
                 room.players[existingTeam].socketId = socket.id;
                 room.players[existingTeam].connected = true;
 
@@ -451,12 +537,10 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // 2-Player Enclosure Check
             if (room.mode !== 'pvp' || (room.players.A && room.players.B)) {
                 return sendClientError('Access Denied: Room is already full (Max 2 players).', 'room_error');
             }
 
-            // Assign Seat B
             room.players.B = { socketId: socket.id, playerToken: playerToken, connected: true, ready: false };
             room.status = 'ready';
 
@@ -483,90 +567,60 @@ io.on('connection', (socket) => {
             });
 
         } catch (err) {
-            console.error(`[JOIN_ROOM ERROR] Socket ${socket.id}:`, err);
             sendClientError('Failed to join match room.', 'room_error');
         }
     });
 
-    // 3. READY-UP PROTOCOL
     socket.on('toggle_ready', () => {
-        try {
-            const roomId = socket.currentRoomId;
-            const room = activeRooms[roomId];
-            if (!room || room.mode !== 'pvp') return;
+        const roomId = socket.currentRoomId;
+        const room = activeRooms[roomId];
+        if (!room || room.mode !== 'pvp') return;
 
-            const team = socket.assignedTeam;
-            if (!team || !room.players || !room.players[team]) return;
+        const team = socket.assignedTeam;
+        if (!team || !room.players || !room.players[team]) return;
 
-            room.lastActivity = Date.now();
-            room.players[team].ready = !room.players[team].ready;
+        room.lastActivity = Date.now();
+        room.players[team].ready = !room.players[team].ready;
 
-            if (room.players.A && room.players.A.ready && room.players.B && room.players.B.ready) {
-                room.draftState.started = true;
-                room.status = 'drafting';
-            }
-
-            io.to(roomId).emit('draft_updated', {
-                roomId: roomId,
-                draftState: room.draftState,
-                status: room.status,
-                mode: room.mode,
-                players: getRoomPlayersSummary(room)
-            });
-        } catch (err) {
-            console.error(`[TOGGLE_READY ERROR] Socket ${socket.id}:`, err);
+        if (room.players.A && room.players.A.ready && room.players.B && room.players.B.ready) {
+            room.draftState.started = true;
+            room.status = 'drafting';
+            startServerTurnTimer(roomId);
         }
+
+        io.to(roomId).emit('draft_updated', {
+            roomId: roomId,
+            draftState: room.draftState,
+            status: room.status,
+            mode: room.mode,
+            players: getRoomPlayersSummary(room)
+        });
     });
 
-    // 4. ACTION TURN EXECUTION (WITH VALIDATION GUARDRAILS)
     socket.on('select_hero', (payload) => {
         try {
-            if (!payload || typeof payload.heroId !== 'string') {
-                return sendClientError('Invalid hero selection payload.', 'draft_error');
-            }
-
+            if (!payload || typeof payload.heroId !== 'string') return;
             const heroId = sanitizeString(payload.heroId, 30).toLowerCase();
             const roomId = socket.currentRoomId;
             const room = activeRooms[roomId];
 
-            if (!room) {
-                return sendClientError('Draft session not found or expired.', 'room_error');
-            }
-
-            if (room.mode === 'auto_sim') {
-                return sendClientError('Manual picks are disabled in Auto-Sim mode.', 'draft_error');
-            }
-
-            if (!room.draftState.started) {
-                return sendClientError('Draft is waiting for players to Ready Up.', 'draft_error');
-            }
-
-            if (room.mode === 'pvp' && (!room.players.A || !room.players.B || !room.players.A.connected || !room.players.B.connected)) {
-                return sendClientError('Waiting for opponent to connect.', 'draft_error');
-            }
+            if (!room || !room.draftState.started || room.draftState.isComplete) return;
 
             const playerTeam = socket.assignedTeam;
             const draft = room.draftState;
-
-            if (draft.isComplete || draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
-                return sendClientError('The draft is already complete.', 'draft_error');
-            }
-
             const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
-            if (!currentTurn || currentTurn.team !== playerTeam) {
-                return sendClientError(`It is currently Team ${currentTurn.team}'s turn.`, 'draft_error');
-            }
+            if (!currentTurn || currentTurn.team !== playerTeam) return;
 
             const hero = HERO_DATASET.find(h => h.id === heroId);
-            if (!hero) {
-                return sendClientError(`Hero '${heroId}' not recognized in roster.`, 'draft_error');
-            }
+            if (!hero) return;
 
-            const allBanned = [...draft.bans.A, ...draft.bans.B].map(h => h.id);
-            const allPicked = [...draft.picks.A, ...draft.picks.B].map(h => h.id);
+            const allBanned = [...draft.bans.A, ...draft.bans.B].filter(Boolean).map(h => h.id);
+            const allPicked = [...draft.picks.A, ...draft.picks.B].filter(Boolean).map(h => h.id);
+            if (allBanned.includes(heroId) || allPicked.includes(heroId)) return;
 
-            if (allBanned.includes(heroId) || allPicked.includes(heroId)) {
-                return sendClientError(`${hero.name} has already been banned or picked.`, 'draft_error');
+            if (room.turnTimer) {
+                clearTimeout(room.turnTimer);
+                room.turnTimer = null;
             }
 
             room.lastActivity = Date.now();
@@ -592,6 +646,8 @@ io.on('connection', (socket) => {
                 draft.isComplete = true;
                 room.status = 'completed';
                 recordCompletedDraft(room);
+            } else {
+                startServerTurnTimer(roomId);
             }
 
             io.to(roomId).emit('draft_updated', {
@@ -602,20 +658,27 @@ io.on('connection', (socket) => {
                 players: getRoomPlayersSummary(room)
             });
 
-            try {
-                processAITurnIfNecessary(roomId);
-            } catch (aiErr) {
-                console.error(`[AI ENGINE ERROR] Room ${roomId}:`, aiErr);
-                sendClientError('AI engine encountered a calculation issue.', 'draft_error');
-            }
-
+            processAITurnIfNecessary(roomId);
         } catch (err) {
-            console.error(`[SELECT_HERO ERROR] Socket ${socket.id}:`, err);
-            sendClientError('Unexpected error processing turn action.', 'draft_error');
+            sendClientError('Error processing selection.', 'draft_error');
         }
     });
 
-    // 5. SIMULATION CONTROLS
+    socket.on('send_chat_message', (payload) => {
+        const roomId = socket.currentRoomId;
+        const room = activeRooms[roomId];
+        if (!room || room.mode !== 'pvp' || !payload || typeof payload.text !== 'string') return;
+
+        const cleanText = payload.text.trim().substring(0, 150);
+        if (!cleanText) return;
+
+        io.to(roomId).emit('new_chat_message', {
+            senderTeam: socket.assignedTeam,
+            text: cleanText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+    });
+
     socket.on('sim_step', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
@@ -642,17 +705,14 @@ io.on('connection', (socket) => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
         if (!room || !room.simInterval) return;
-
         clearInterval(room.simInterval);
         room.simInterval = null;
     });
 
-    // 6. DRAFT HISTORY ARCHIVE RETRIEVAL
     socket.on('get_draft_history', () => {
         socket.emit('draft_history_data', temporaryDraftHistory);
     });
 
-    // 7. REMATCH REQUEST
     socket.on('request_rematch', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
@@ -660,7 +720,6 @@ io.on('connection', (socket) => {
         performRoomReset(room, roomId);
     });
 
-    // 8. RESET PROTOCOL
     socket.on('request_reset', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
@@ -704,7 +763,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 9. LEAVE ROOM & DISCONNECT HANDLING
     socket.on('leave_room', () => {
         const roomId = socket.currentRoomId;
         if (roomId && activeRooms[roomId]) {
@@ -721,10 +779,7 @@ io.on('connection', (socket) => {
         room.lastActivity = Date.now();
 
         if (room.mode !== 'pvp') {
-            if (room.simInterval) {
-                clearInterval(room.simInterval);
-                room.simInterval = null;
-            }
+            if (room.simInterval) { clearInterval(room.simInterval); room.simInterval = null; }
             if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
             room.cleanupTimer = setTimeout(() => destroyRoom(roomId, 'Solo practice session closed.'), 45000);
             return;

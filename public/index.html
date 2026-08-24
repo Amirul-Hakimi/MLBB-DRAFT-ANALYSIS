@@ -6,7 +6,7 @@
     <title>MLBB Draft Tool | Esports Ban/Pick Arena</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -20,22 +20,15 @@
                     <span class="subtitle">Competitive Ban/Pick Simulator</span>
                 </div>
             </div>
-            <!-- UPDATE NAVBAR STATUS BADGE IN public/index.html -->
-<div class="nav-right" style="display: flex; align-items: center; gap: 10px;">
-    <button type="button" id="btn-view-history" class="btn btn-sm btn-secondary" style="font-weight: 700;">
-        📜 Draft History
-    </button>
-    <div id="connection-status" class="status-badge disconnected">
-        <span class="status-dot"></span>
-        <span class="status-label">DISCONNECTED</span>
-    </div>
-</div>
-
-<!-- GLOBAL NOTIFICATION TOAST (Add right before </body>) -->
-<div id="app-toast" class="app-toast hidden">
-    <span class="toast-icon" id="toast-icon">⚠️</span>
-    <span class="toast-message" id="toast-message">Notice</span>
-</div>
+            <div class="nav-right" style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" id="btn-view-history" class="btn btn-sm btn-secondary" style="font-weight: 700;">
+                    📜 Draft History
+                </button>
+                <div id="connection-status" class="status-badge disconnected">
+                    <span class="status-dot"></span>
+                    <span class="status-label">DISCONNECTED</span>
+                </div>
+            </div>
         </header>
 
         <!-- 1. HOME SCREEN: MATCH SETUP -->
@@ -90,7 +83,24 @@
                     <input type="text" id="room-id-input" placeholder="e.g. A3K9M2" maxlength="6" autocomplete="off" autocapitalize="characters">
                 </div>
 
-                <button id="btn-enter-room" class="btn btn-gold btn-large">
+                <!-- Royalty-Free Lobby Ambient Player -->
+                <div class="card music-player-card" style="margin-top: 14px; background: #0f172a; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>🎵</span>
+                        <span style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1;">Lobby Music:</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <select id="music-track-select" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 6px;">
+                            <option value="none">Mute</option>
+                            <option value="track1" selected>Lo-Fi Arena</option>
+                            <option value="track2">Synthwave Drive</option>
+                        </select>
+                        <button type="button" id="btn-toggle-music" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 8px;">▶ Play</button>
+                        <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3" style="width: 60px; accent-color: #f59e0b;">
+                    </div>
+                </div>
+
+                <button id="btn-enter-room" class="btn btn-gold btn-large" style="margin-top: 14px;">
                     <span>Enter Lobby</span>
                     <span class="btn-arrow">→</span>
                 </button>
@@ -106,7 +116,6 @@
                     <p class="card-desc">Both players must Ready Up to start the tournament draft</p>
                 </div>
 
-                <!-- Shareable Room Code Box -->
                 <div class="room-share-box">
                     <div class="share-label">SHARE ROOM CODE</div>
                     <div class="share-code-row">
@@ -116,7 +125,6 @@
                     <span id="copy-toast" class="copy-toast hidden">Copied to clipboard!</span>
                 </div>
 
-                <!-- Versus Staging Slots -->
                 <div class="staging-slots-grid">
                     <div class="slot-card blue-slot" id="lobby-slot-a">
                         <div class="slot-team-tag">BLUE TEAM (A)</div>
@@ -135,7 +143,6 @@
                     </div>
                 </div>
 
-                <!-- Staging Ready Actions -->
                 <div class="lobby-actions-footer">
                     <button id="btn-lobby-leave" class="btn btn-outline-danger">Leave Lobby</button>
                     <button id="btn-toggle-ready" class="btn btn-gold btn-large">
@@ -149,7 +156,6 @@
         <!-- 3. DRAFT ARENA SCREEN -->
         <section id="draft-screen" class="screen hidden">
             
-            <!-- Auto-Sim Control Toolbar (Shown ONLY in auto_sim) -->
             <div id="sim-control-bar" class="sim-toolbar hidden">
                 <div class="sim-label">
                     <span class="sim-indicator"></span>
@@ -176,11 +182,17 @@
                     <ul id="blue-picks" class="picks-slots-list"></ul>
                 </div>
 
-                <!-- Center Turn Announcer -->
+                <!-- Center Turn Announcer & 30s Clock -->
                 <div class="turn-announcer-center">
                     <div class="room-code-tag">
                         <span id="room-display-tag">ROOM: ----</span>
                     </div>
+
+                    <!-- 30-Second Synchronized Countdown Clock -->
+                    <div id="turn-timer-clock" style="font-family: 'Rajdhani', sans-serif; font-size: 2.2rem; font-weight: 800; color: #10b981; margin: 4px 0; text-shadow: 0 0 12px rgba(16,185,129,0.4);">
+                        ⏱️ <span id="timer-seconds-display">30</span>s
+                    </div>
+
                     <div id="turn-banner-text" class="turn-headline">READY TO DRAFT</div>
                     <div id="phase-banner-text" class="phase-badge">BAN PHASE 1</div>
                     <div id="reset-status-banner" class="status-subtext hidden"></div>
@@ -198,7 +210,6 @@
                 </div>
             </div>
 
-            <!-- 20-Turn Draft Sequence Timeline -->
             <div class="timeline-container">
                 <div class="timeline-header">
                     <span>DRAFT PROGRESS TIMELINE</span>
@@ -210,7 +221,6 @@
                 <div id="timeline-strip" class="timeline-strip"></div>
             </div>
 
-            <!-- Strategic Recommendation Panel -->
             <div class="recommendation-panel" id="recommendation-panel">
                 <div class="rec-header">
                     <span class="rec-icon">⚡</span>
@@ -221,7 +231,6 @@
 
             <!-- Hero Selector Section -->
             <div class="hero-selector-section">
-                <!-- FILTER CONTROLS BAR -->
                 <div class="filter-controls-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
                     <div class="search-and-mode-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
                         <div class="search-wrap" style="flex: 1; min-width: 200px;">
@@ -229,64 +238,57 @@
                             <input type="text" id="hero-search" placeholder="Filter heroes by name..." autocomplete="off">
                         </div>
                         
-                        <!-- MODE TOGGLE SWITCH -->
                         <div class="filter-mode-switch" style="display: inline-flex; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 3px; gap: 4px;">
                             <button type="button" class="btn btn-sm active" id="modeLaneBtn" style="font-weight: 700;">Map Lanes</button>
                             <button type="button" class="btn btn-sm btn-secondary" id="modeRoleBtn" style="font-weight: 700;">Hero Classes</button>
                         </div>
                     </div>
 
-                    <!-- DYNAMIC FILTER BUTTONS -->
-                    <div class="lane-filter-tabs" id="filterPillsContainer" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <!-- Injected dynamically by main.js based on selected mode -->
-                    </div>
+                    <div class="lane-filter-tabs" id="filterPillsContainer" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
                 </div>
 
-                <!-- Hero Cards Grid -->
                 <div id="hero-grid" class="hero-grid"></div>
             </div>
 
-            <!-- Action Log & Room Controls Footer -->
-            <div class="bottom-tools-grid">
+            <!-- Bottom Tools Grid: Ticker, PvP Chat & Actions -->
+            <div class="bottom-tools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 16px;">
                 <div class="draft-log-box">
                     <div class="log-header">📜 Chronological Action Ticker</div>
                     <ul id="draft-log-list" class="log-list"></ul>
                 </div>
 
-                <div class="footer-actions">
+                <!-- In-Room Opponent Chat (Shown ONLY in PvP) -->
+                <div id="pvp-chat-card" class="pvp-chat-card hidden" style="background: #111927; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; height: 180px;">
+                    <div style="font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.95rem; color: #f59e0b; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                        <span>💬 In-Room Opponent Chat</span>
+                        <span style="font-size: 0.7rem; color: #64748b;">Live Room Feed</span>
+                    </div>
+                    <div id="chat-messages-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; margin-bottom: 8px;">
+                        <span style="color: #64748b; font-style: italic;">Chat initialized. Say glhf!</span>
+                    </div>
+                    <form id="chat-form" style="display: flex; gap: 6px;">
+                        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="150" autocomplete="off" style="flex: 1; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.8rem;">
+                        <button type="submit" class="btn btn-gold btn-sm">Send</button>
+                    </form>
+                </div>
+
+                <div class="footer-actions" style="display: flex; flex-direction: column; justify-content: center; gap: 8px;">
                     <button id="btn-manual-reset" class="btn btn-secondary">🔄 Reset Draft</button>
                     <button id="btn-leave-room" class="btn btn-outline-danger">Exit Room</button>
                 </div>
             </div>
         </section>
 
-        <!-- PvP Reset Confirmation Modal -->
-        <div id="reset-confirm-modal" class="modal-overlay hidden">
-            <div class="modal-card modal-sm">
-                <div class="modal-header">
-                    <h2>Reset Draft Request</h2>
-                </div>
-                <p id="reset-request-text" class="disclaimer-text">
-                    Your opponent has requested to reset the current draft to Turn 1. Do you agree?
-                </p>
-                <div class="modal-actions-dual">
-                    <button id="btn-accept-reset" class="btn btn-gold">Accept Reset</button>
-                    <button id="btn-decline-reset" class="btn btn-secondary">Decline</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Final Post-Draft Comparison Screen Modal -->
+        <!-- Post-Draft Comparison Screen Modal -->
         <div id="post-draft-modal" class="modal-overlay hidden">
             <div class="modal-card post-draft-card">
                 <div class="modal-header text-center">
                     <h2 class="glow-text">POST-DRAFT EVALUATION</h2>
                     <p class="disclaimer-badge">
-                        ⚠️ Heuristic Draft Analysis &mdash; Indicates strategic profile & draft advantage, not a guaranteed match outcome.
+                        ⚠️ Heuristic Draft Analysis &mdash; Strategic breakdown of composition balance and advantage.
                     </p>
                 </div>
 
-                <!-- Overall Score Versus Header -->
                 <div class="draft-vs-score-board">
                     <div class="team-score-block blue-side">
                         <span class="team-name">BLUE TEAM (A)</span>
@@ -306,19 +308,15 @@
                     </div>
                 </div>
 
-                <!-- Category Comparison Matrix -->
                 <div class="comparison-matrix-container">
                     <div class="matrix-header-row">
                         <span class="col-team">Team A</span>
                         <span class="col-cat">Evaluation Category</span>
                         <span class="col-team">Team B</span>
                     </div>
-                    <div class="matrix-rows-list" id="comparison-matrix-list">
-                        <!-- Dynamically populated via main.js -->
-                    </div>
+                    <div class="matrix-rows-list" id="comparison-matrix-list"></div>
                 </div>
 
-                <!-- Lineup Summary Section -->
                 <div class="lineup-summary-grid">
                     <div class="lineup-col blue-side">
                         <h4>Blue Team Draft Lineup</h4>
@@ -332,7 +330,6 @@
                     </div>
                 </div>
 
-                <!-- Post-Draft Action Bar -->
                 <div class="modal-actions-dual" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 16px;">
                     <button type="button" id="btn-rematch" class="btn btn-gold">🔄 Rematch</button>
                     <button type="button" id="btn-new-draft" class="btn btn-secondary">⚡ New Draft</button>
@@ -342,7 +339,7 @@
             </div>
         </div>
 
-        <!-- DRAFT HISTORY MODAL (TEMPORARY IN-MEMORY) -->
+        <!-- Draft History Modal -->
         <div id="history-modal" class="modal-overlay hidden">
             <div class="modal-card post-draft-card">
                 <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -354,34 +351,22 @@
                     </div>
                     <button type="button" id="btn-close-history" class="btn btn-sm btn-secondary">✕ Close</button>
                 </div>
-
-                <div id="history-list-container" class="history-list-container" style="max-height: 60vh; overflow-y: auto; margin: 16px 0; display: flex; flex-direction: column; gap: 12px;">
-                    <!-- Rendered by main.js -->
-                </div>
+                <div id="history-list-container" style="max-height: 60vh; overflow-y: auto; margin: 16px 0; display: flex; flex-direction: column; gap: 12px;"></div>
             </div>
         </div>
 
-        <!-- Opponent Disconnected Countdown Modal -->
-        <div id="disconnect-modal" class="modal-overlay hidden">
-            <div class="modal-card modal-sm">
-                <div class="modal-header">
-                    <h2 style="color: var(--red-side, #ef4444);">⚠️ Opponent Disconnected</h2>
-                </div>
-                <p class="disclaimer-text" id="disconnect-modal-text">
-                    Your opponent left the room. Waiting for them to reconnect...
-                </p>
-                <div class="countdown-display" style="font-family: var(--font-heading, 'Rajdhani', sans-serif); font-size: 3rem; font-weight: 700; color: var(--gold-accent, #f59e0b); margin: 15px 0; text-align: center;">
-                    <span id="disconnect-countdown">30</span>s
-                </div>
-                <p style="font-size: 0.8rem; color: var(--text-muted, #94a3b8); margin-bottom: 20px; text-align: center;">
-                    The room will automatically close if the opponent does not return.
-                </p>
-                <button id="btn-leave-now" class="btn btn-outline-danger btn-large">Leave Room Now</button>
-            </div>
+        <!-- Audio Sources for Lobby Music (CC0 Royalty-Free) -->
+        <audio id="bg-audio-track1" loop preload="none" src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3"></audio>
+        <audio id="bg-audio-track2" loop preload="none" src="https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=electronic-future-beats-117997.mp3"></audio>
+
+        <!-- Global Toast Notification -->
+        <div id="app-toast" class="app-toast hidden">
+            <span class="toast-icon" id="toast-icon">⚠️</span>
+            <span class="toast-message" id="toast-message">Notice</span>
         </div>
     </div>
 
-    <!-- Script Dependencies -->
+    <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/hero-data.js"></script>
     <script src="/js/draft-engine.js"></script>

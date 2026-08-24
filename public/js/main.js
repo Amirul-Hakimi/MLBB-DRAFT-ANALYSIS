@@ -11,22 +11,27 @@ if (!clientPlayerToken) {
     sessionStorage.setItem('mlbb_player_token', clientPlayerToken);
 }
 
-// Check if user was previously in an active room before refresh
 let savedRoomId = sessionStorage.getItem('mlbb_active_room_id');
 let currentRoomId = savedRoomId || null;
-let currentAssignedTeam = 'SPEC'; // 'A' | 'B' | 'SPEC'
-window.currentRoomMode = 'vs_ai'; // 'vs_ai' | 'auto_sim' | 'pvp'
+let currentAssignedTeam = 'SPEC';
+window.currentRoomMode = 'vs_ai';
 let currentDraftState = null;
 let isSubmittingAction = false;
 let disconnectInterval = null;
 
 // Filter & Cache State
-let currentFilterMode = 'lane'; // 'lane' | 'role'
+let currentFilterMode = 'lane';
 let currentCategoryFilter = 'ALL';
 let currentSearchQuery = '';
 let searchDebounceTimer = null;
 const heroCardNodeCache = new Map();
 let cachedRecommendedIds = new Set();
+
+// Turn Timer & Audio State
+let turnTimerInterval = null;
+let remainingTurnSeconds = 30;
+let audioCtx = null;
+let activeAudioElement = null;
 
 const LANE_FILTERS = [
     { label: 'ALL', key: 'ALL' },
@@ -61,10 +66,206 @@ let resetConfirmModal, resetRequestText, btnAcceptReset, btnDeclineReset;
 let postDraftModal, btnCloseModal, btnRematch, btnNewDraft, btnReturnLobby;
 let historyModal, btnViewHistory, btnCloseHistory, historyListContainer;
 let disconnectModal, disconnectCountdown, btnLeaveNow;
+let pvpChatCard;
 
 // =========================================================================
-// TOAST & CONNECTION HELPERS
+// SYNTHESIZED WEB AUDIO API
 // =========================================================================
+function getAudioContext() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
+}
+
+function playClickSound() {
+    try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+    } catch (e) {}
+}
+
+function playTickSound() {
+    try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+    } catch (e) {}
+}
+
+function playTimesUpSound() {
+    try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(110, ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+    } catch (e) {}
+}
+
+// =========================================================================
+// AUTHORITATIVE 30-SECOND TURN TIMER (ANTI-CHEAT / ANTI-REFRESH)
+// =========================================================================
+function startTurnTimer() {
+    clearInterval(turnTimerInterval);
+    if (!draftState || draftState.isComplete || !draftState.started || window.currentRoomMode === 'auto_sim') {
+        const timerClock = document.getElementById('turn-timer-clock');
+        if (timerClock && draftState && draftState.isComplete) {
+            timerClock.innerHTML = `⏱️ <span id="timer-seconds-display">0</span>s`;
+            timerClock.style.color = '#64748b';
+        }
+        return;
+    }
+
+    const timerDisplay = document.getElementById('timer-seconds-display');
+    const timerClock = document.getElementById('turn-timer-clock');
+
+    function syncTick() {
+        if (!draftState.turnExpiresAt) {
+            remainingTurnSeconds = 30;
+        } else {
+            // Compute real-time server expiration delta
+            remainingTurnSeconds = Math.max(0, Math.ceil((draftState.turnExpiresAt - Date.now()) / 1000));
+        }
+
+        if (timerDisplay) timerDisplay.textContent = remainingTurnSeconds;
+        if (timerClock) {
+            if (remainingTurnSeconds <= 5) {
+                timerClock.style.color = '#ef4444';
+            } else if (remainingTurnSeconds <= 10) {
+                timerClock.style.color = '#f59e0b';
+            } else {
+                timerClock.style.color = '#10b981';
+            }
+        }
+
+        if (remainingTurnSeconds <= 5 && remainingTurnSeconds > 0) {
+            playTickSound();
+        }
+
+        if (remainingTurnSeconds <= 0) {
+            clearInterval(turnTimerInterval);
+            playTimesUpSound();
+        }
+    }
+
+    syncTick();
+    turnTimerInterval = setInterval(syncTick, 1000);
+}
+
+// =========================================================================
+// LOBBY BACKGROUND MUSIC CONTROLLER
+// =========================================================================
+function initMusicPlayer() {
+    const btnToggle = document.getElementById('btn-toggle-music');
+    const selectTrack = document.getElementById('music-track-select');
+    const volumeSlider = document.getElementById('music-volume');
+
+    function updateAudioTrack() {
+        if (activeAudioElement) {
+            activeAudioElement.pause();
+            activeAudioElement.currentTime = 0;
+        }
+
+        const selectedVal = selectTrack?.value;
+        if (selectedVal === 'track1') {
+            activeAudioElement = document.getElementById('bg-audio-track1');
+        } else if (selectedVal === 'track2') {
+            activeAudioElement = document.getElementById('bg-audio-track2');
+        } else {
+            activeAudioElement = null;
+        }
+
+        if (activeAudioElement && volumeSlider) {
+            activeAudioElement.volume = parseFloat(volumeSlider.value);
+            activeAudioElement.play().catch(() => {});
+            if (btnToggle) btnToggle.textContent = '⏸ Pause';
+        } else {
+            if (btnToggle) btnToggle.textContent = '▶ Play';
+        }
+    }
+
+    btnToggle?.addEventListener('click', () => {
+        if (!activeAudioElement) {
+            updateAudioTrack();
+            return;
+        }
+        if (activeAudioElement.paused) {
+            activeAudioElement.play().catch(() => {});
+            btnToggle.textContent = '⏸ Pause';
+        } else {
+            activeAudioElement.pause();
+            btnToggle.textContent = '▶ Play';
+        }
+    });
+
+    selectTrack?.addEventListener('change', updateAudioTrack);
+    volumeSlider?.addEventListener('input', (e) => {
+        if (activeAudioElement) activeAudioElement.volume = parseFloat(e.target.value);
+    });
+}
+
+// =========================================================================
+// IN-ROOM PVP CHAT CONTROLLER
+// =========================================================================
+function initChatController() {
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const chatContainer = document.getElementById('chat-messages-container');
+
+    chatForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = chatInput?.value.trim();
+        if (!text) return;
+        socket.emit('send_chat_message', { text });
+        if (chatInput) chatInput.value = '';
+    });
+
+    socket.on('new_chat_message', (msg) => {
+        if (!chatContainer) return;
+        const msgDiv = document.createElement('div');
+        const isMe = msg.senderTeam === currentAssignedTeam;
+        const teamColor = msg.senderTeam === 'A' ? '#38bdf8' : (msg.senderTeam === 'B' ? '#f87171' : '#f59e0b');
+
+        msgDiv.innerHTML = `
+            <span style="font-size: 0.7rem; color: #64748b;">[${msg.timestamp}]</span>
+            <strong style="color: ${teamColor};">Team ${msg.senderTeam}${isMe ? ' (You)' : ''}:</strong> 
+            <span style="color: #f1f5f9;">${msg.text}</span>
+        `;
+        chatContainer.appendChild(msgDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    });
+}
+
+// Toast Notification
 function showToast(message, type = 'error', durationMs = 3000) {
     const toast = document.getElementById('app-toast');
     const toastMsg = document.getElementById('toast-message');
@@ -99,9 +300,6 @@ function clearActiveRoomSession() {
     currentRoomId = null;
 }
 
-// =========================================================================
-// AVATAR GENERATION WITH FALLBACKS
-// =========================================================================
 const HERO_IMAGE_ALIASES = {
     "change": "chang'e",
     "popol_and_kupa": "popol-and-kupa",
@@ -152,17 +350,14 @@ function createHeroAvatarHTML(hero, customClass = '') {
 // INITIALIZATION
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Screens
     setupScreen = document.getElementById('setup-screen');
     lobbyScreen = document.getElementById('lobby-screen');
     draftScreen = document.getElementById('draft-screen');
 
-    // Status
     connectionStatus = document.getElementById('connection-status');
     connDot = connectionStatus?.querySelector('.status-dot');
     connLabel = connectionStatus?.querySelector('.status-label');
 
-    // Setup screen
     btnModeAi = document.getElementById('btn-mode-ai');
     btnModeSim = document.getElementById('btn-mode-sim');
     btnModeCreate = document.getElementById('btn-mode-create');
@@ -171,7 +366,6 @@ document.addEventListener('DOMContentLoaded', () => {
     roomIdInput = document.getElementById('room-id-input');
     btnEnterRoom = document.getElementById('btn-enter-room');
 
-    // Lobby screen
     lobbyRoomCode = document.getElementById('lobby-room-code');
     btnCopyCode = document.getElementById('btn-copy-code');
     copyToast = document.getElementById('copy-toast');
@@ -183,7 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnToggleReady = document.getElementById('btn-toggle-ready');
     readyBtnText = document.getElementById('ready-btn-text');
 
-    // Draft screen
     simControlBar = document.getElementById('sim-control-bar');
     btnSimStep = document.getElementById('btn-sim-step');
     btnSimAuto = document.getElementById('btn-sim-auto');
@@ -204,38 +397,33 @@ document.addEventListener('DOMContentLoaded', () => {
     recTitleText = document.getElementById('rec-title-text');
     recChipsContainer = document.getElementById('rec-chips-container');
 
-    // Filters & Grid
     heroSearchInput = document.getElementById('hero-search');
     filterPillsContainer = document.getElementById('filterPillsContainer');
     modeLaneBtn = document.getElementById('modeLaneBtn');
     modeRoleBtn = document.getElementById('modeRoleBtn');
     heroGrid = document.getElementById('hero-grid');
 
-    // Bottom Tools
     draftLogList = document.getElementById('draft-log-list');
     btnManualReset = document.getElementById('btn-manual-reset');
     btnLeaveRoom = document.getElementById('btn-leave-room');
+    pvpChatCard = document.getElementById('pvp-chat-card');
 
-    // Reset Modal
     resetConfirmModal = document.getElementById('reset-confirm-modal');
     resetRequestText = document.getElementById('reset-request-text');
     btnAcceptReset = document.getElementById('btn-accept-reset');
     btnDeclineReset = document.getElementById('btn-decline-reset');
 
-    // Post-Draft Evaluation Modal
     postDraftModal = document.getElementById('post-draft-modal');
     btnCloseModal = document.getElementById('btn-close-modal');
     btnRematch = document.getElementById('btn-rematch');
     btnNewDraft = document.getElementById('btn-new-draft');
     btnReturnLobby = document.getElementById('btn-return-lobby');
 
-    // Draft History Modal
     historyModal = document.getElementById('history-modal');
     btnViewHistory = document.getElementById('btn-view-history');
     btnCloseHistory = document.getElementById('btn-close-history');
     historyListContainer = document.getElementById('history-list-container');
 
-    // Disconnect Modal
     disconnectModal = document.getElementById('disconnect-modal');
     disconnectCountdown = document.getElementById('disconnect-countdown');
     btnLeaveNow = document.getElementById('btn-leave-now');
@@ -243,14 +431,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initSetupListeners();
     initDraftListeners();
     initDualFilterSystem();
+    initMusicPlayer();
+    initChatController();
     buildTimelineTrack();
     renderFilterPills();
     buildInitialHeroGrid();
 });
 
-// =========================================================================
-// SCREEN SWITCHING
-// =========================================================================
 function showScreen(screenId) {
     [setupScreen, lobbyScreen, draftScreen].forEach(s => {
         if (s) s.classList.add('hidden');
@@ -262,9 +449,6 @@ function showScreen(screenId) {
     }
 }
 
-// =========================================================================
-// SETUP SCREEN CONTROLS
-// =========================================================================
 let selectedSetupMode = 'vs_ai';
 
 function initSetupListeners() {
@@ -315,9 +499,6 @@ function joinRoom(roomId) {
     socket.emit('join_room', { targetRoomId: roomId, playerToken: clientPlayerToken });
 }
 
-// =========================================================================
-// DUAL MODE FILTER LOGIC
-// =========================================================================
 function initDualFilterSystem() {
     if (modeLaneBtn && modeRoleBtn) {
         modeLaneBtn.addEventListener('click', () => {
@@ -378,7 +559,6 @@ function renderFilterPills() {
     });
 }
 
-// Persistent Initial Render with Event Delegation
 function buildInitialHeroGrid() {
     if (!heroGrid) return;
     heroGrid.innerHTML = '';
@@ -401,7 +581,6 @@ function buildInitialHeroGrid() {
         const displayTags = (currentFilterMode === 'lane') ? lanes : classes;
         const tagsHtml = displayTags.map(t => `<span class="tag-badge">${t}</span>`).join('');
 
-        // Do NOT insert <span class="rec-badge"> by default here
         card.innerHTML = `
             ${createHeroAvatarHTML(hero, 'card-avatar')}
             <div class="card-info">
@@ -416,7 +595,6 @@ function buildInitialHeroGrid() {
 
     heroGrid.appendChild(fragment);
 
-    // Event Delegation
     heroGrid.addEventListener('click', (e) => {
         const card = e.target.closest('.hero-card');
         if (!card || card.classList.contains('disabled') || isSubmittingAction) return;
@@ -424,6 +602,7 @@ function buildInitialHeroGrid() {
         const heroId = card.dataset.heroId;
         if (!heroId || isHeroUnavailable(heroId)) return;
 
+        playClickSound();
         isSubmittingAction = true;
         socket.emit('select_hero', { heroId: heroId });
     });
@@ -431,7 +610,6 @@ function buildInitialHeroGrid() {
     updateHeroGridState();
 }
 
-// Lightweight State & Recommendation Updater
 function updateHeroGridState() {
     if (heroCardNodeCache.size === 0) return;
 
@@ -440,7 +618,6 @@ function updateHeroGridState() {
     const isSimMode = window.currentRoomMode === 'auto_sim';
     const isComplete = (typeof draftState !== 'undefined' && draftState) ? draftState.isComplete : false;
 
-    // 1. Compute recommended hero IDs for this specific turn
     let recommendedIdSet = new Set();
     if (!isComplete && !isSimMode && typeof getRecommendations === 'function') {
         const recData = getRecommendations();
@@ -452,7 +629,6 @@ function updateHeroGridState() {
     }
 
     heroCardNodeCache.forEach((card, heroId) => {
-        // Fast filtering check
         const matchesName = !query || card.dataset.name.includes(query);
         let matchesCategory = (filterKey === 'all');
 
@@ -470,7 +646,6 @@ function updateHeroGridState() {
         }
         card.style.display = 'flex';
 
-        // Update tag pills
         const hero = HERO_DATASET.find(h => h.id === heroId);
         const tagsContainer = card.querySelector('.card-tags');
         if (tagsContainer && hero) {
@@ -508,9 +683,6 @@ function updateHeroGridState() {
     });
 }
 
-// =========================================================================
-// TIMELINE TRACK BUILDER
-// =========================================================================
 function buildTimelineTrack() {
     if (!timelineStrip) return;
     timelineStrip.innerHTML = '';
@@ -538,9 +710,6 @@ function updateTimelineUI() {
     });
 }
 
-// =========================================================================
-// DRAFT INTERACTION & CONTROLS
-// =========================================================================
 function initDraftListeners() {
     btnCopyCode?.addEventListener('click', () => {
         if (!currentRoomId) return;
@@ -614,9 +783,6 @@ function initDraftListeners() {
     });
 }
 
-// =========================================================================
-// UI SYNCHRONIZATION FROM SERVER
-// =========================================================================
 function syncStagingLobbyUI(roomPayload) {
     const { roomId, players, status } = roomPayload;
     if (lobbyRoomCode) lobbyRoomCode.textContent = roomId || '------';
@@ -664,6 +830,17 @@ function syncDraftArenaUI(roomPayload) {
         }
     }
 
+    // Strict PvP-Only Chat display rule
+    if (pvpChatCard) {
+        if (mode === 'pvp') {
+            pvpChatCard.classList.remove('hidden');
+            pvpChatCard.style.display = 'flex';
+        } else {
+            pvpChatCard.classList.add('hidden');
+            pvpChatCard.style.display = 'none';
+        }
+    }
+
     renderBanChips(blueBans, draftState.bans?.A || []);
     renderBanChips(redBans, draftState.bans?.B || []);
 
@@ -677,27 +854,38 @@ function syncDraftArenaUI(roomPayload) {
     renderActionLogs();
 
     if (draftState.isComplete) {
+        clearInterval(turnTimerInterval);
         showPostDraftEvaluation();
+    } else if (draftState.started) {
+        startTurnTimer();
     }
 }
 
 function renderBanChips(container, bans) {
     if (!container) return;
     container.innerHTML = '';
-    if (bans.length === 0) {
-        container.innerHTML = '<span class="empty-ban-text">None</span>';
+
+    const safeBans = (bans || []).filter(Boolean);
+
+    if (safeBans.length === 0) {
+        container.innerHTML = '<span class="empty-ban-text" style="color:#64748b; font-size:0.75rem;">None</span>';
         return;
     }
 
-    bans.forEach(hero => {
+    safeBans.forEach(hero => {
         const chip = document.createElement('div');
-        chip.className = 'ban-badge';
-        chip.innerHTML = `
-            <div class="ban-avatar-box">
-                ${createHeroAvatarHTML(hero, 'ban-avatar-img')}
-            </div>
-            <span class="ban-hero-name">${hero.name}</span>
-        `;
+        if (hero.isSkipped || hero.id === 'skipped' || hero.name === 'None (Timeout)') {
+            chip.className = 'ban-badge skipped-ban';
+            chip.innerHTML = `<span>🚫 Skipped</span>`;
+        } else {
+            chip.className = 'ban-badge';
+            chip.innerHTML = `
+                <div class="ban-avatar-box">
+                    ${createHeroAvatarHTML(hero, 'ban-avatar-img')}
+                </div>
+                <span class="ban-hero-name">${hero.name}</span>
+            `;
+        }
         container.appendChild(chip);
     });
 }
@@ -785,6 +973,7 @@ function renderRecommendations() {
 
         chip.addEventListener('click', () => {
             if (isSubmittingAction || isHeroUnavailable(hero.id)) return;
+            playClickSound();
             isSubmittingAction = true;
             socket.emit('select_hero', { heroId: hero.id });
         });
@@ -812,9 +1001,6 @@ function renderActionLogs() {
     draftLogList.scrollTop = draftLogList.scrollHeight;
 }
 
-// =========================================================================
-// POST-DRAFT COMPARISON SCREEN EVALUATION
-// =========================================================================
 function showPostDraftEvaluation() {
     const modal = document.getElementById('post-draft-modal');
     if (!modal) return;
@@ -822,10 +1008,10 @@ function showPostDraftEvaluation() {
     const state = (typeof draftState !== 'undefined' && draftState) ? draftState : currentDraftState;
     if (!state) return;
 
-    const picksA = state.picks?.A || [];
-    const bansA = state.bans?.A || [];
-    const picksB = state.picks?.B || [];
-    const bansB = state.bans?.B || [];
+    const picksA = (state.picks?.A || []).filter(Boolean);
+    const bansA = (state.bans?.A || []).filter(Boolean);
+    const picksB = (state.picks?.B || []).filter(Boolean);
+    const bansB = (state.bans?.B || []).filter(Boolean);
 
     const evalResult = (typeof evaluateDraftComparison === 'function')
         ? evaluateDraftComparison(picksA, bansA, picksB, bansB)
@@ -896,12 +1082,9 @@ function showPostDraftEvaluation() {
     modal.classList.remove('hidden');
 }
 
-// =========================================================================
-// SOCKET EVENT HANDLERS & CONNECTION LIFECYCLE
-// =========================================================================
+// Sockets
 socket.on('connect', () => {
     updateConnectionBadge('CONNECTED');
-
     const activeRoom = sessionStorage.getItem('mlbb_active_room_id');
     if (activeRoom) {
         socket.emit('join_room', { targetRoomId: activeRoom, playerToken: clientPlayerToken });
@@ -910,6 +1093,7 @@ socket.on('connect', () => {
 
 socket.on('disconnect', () => {
     updateConnectionBadge('DISCONNECTED');
+    clearInterval(turnTimerInterval);
     showToast('Disconnected from server. Reconnecting...', 'error');
 });
 
@@ -1018,28 +1202,20 @@ socket.on('draft_history_data', (historyList) => {
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.75rem;">
                 <div>
-                    <strong style="color: #38bdf8;">Team A Picks:</strong> ${entry.picks.A.map(h => h.name).join(', ') || 'None'}<br/>
-                    <strong style="color: #64748b;">Team A Bans:</strong> ${entry.bans.A.map(h => h.name).join(', ') || 'None'}
+                    <strong style="color: #38bdf8;">Team A Picks:</strong> ${entry.picks.A.filter(Boolean).map(h => h.name).join(', ') || 'None'}<br/>
+                    <strong style="color: #64748b;">Team A Bans:</strong> ${entry.bans.A.filter(Boolean).map(h => h.name).join(', ') || 'None'}
                 </div>
                 <div>
-                    <strong style="color: #f87171;">Team B Picks:</strong> ${entry.picks.B.map(h => h.name).join(', ') || 'None'}<br/>
-                    <strong style="color: #64748b;">Team B Bans:</strong> ${entry.bans.B.map(h => h.name).join(', ') || 'None'}
+                    <strong style="color: #f87171;">Team B Picks:</strong> ${entry.picks.B.filter(Boolean).map(h => h.name).join(', ') || 'None'}<br/>
+                    <strong style="color: #64748b;">Team B Bans:</strong> ${entry.bans.B.filter(Boolean).map(h => h.name).join(', ') || 'None'}
                 </div>
             </div>
-
-            <details style="margin-top: 10px; font-size: 0.75rem; color: #94a3b8; cursor: pointer;">
-                <summary style="font-weight: 600; color: #cbd5e1;">View 20-Turn Execution Order (${entry.draftLog.length} Actions)</summary>
-                <div style="margin-top: 6px; padding: 6px; background: rgba(0,0,0,0.3); border-radius: 6px; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;">
-                    ${entry.draftLog.map(l => `<span>Turn ${l.turn} [Team ${l.team}]: ${l.action.toUpperCase()} ${l.hero}</span>`).join('')}
-                </div>
-            </details>
         `;
 
         container.appendChild(card);
     });
 });
 
-// App & Room Level Errors
 socket.on('app_error', (data) => {
     isSubmittingAction = false;
     showToast(data.message || 'Action rejected by server.', 'error');
@@ -1089,6 +1265,7 @@ socket.on('player_reconnected', () => {
 
 socket.on('room_dismissed', (data) => {
     clearActiveRoomSession();
+    clearInterval(turnTimerInterval);
     if (disconnectInterval) clearInterval(disconnectInterval);
     alert(data.message || 'Room was closed.');
     window.location.reload();

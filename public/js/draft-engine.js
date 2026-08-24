@@ -42,60 +42,147 @@ function getCurrentTurn() {
     return DRAFT_SEQUENCE[draftState.currentTurnIndex];
 }
 
-// FIXED: Use .some() so only actually picked or banned heroes are marked unavailable
 function isHeroUnavailable(heroId) {
     if (!draftState) return false;
-    const isBanned = [...(draftState.bans?.A || []), ...(draftState.bans?.B || [])].some(h => h.id === heroId);
-    const isPicked = [...(draftState.picks?.A || []), ...(draftState.picks?.B || [])].some(h => h.id === heroId);
+    const isBanned = [...(draftState.bans?.A || []), ...(draftState.bans?.B || [])].filter(Boolean).some(h => h.id === heroId);
+    const isPicked = [...(draftState.picks?.A || []), ...(draftState.picks?.B || [])].filter(Boolean).some(h => h.id === heroId);
     return isBanned || isPicked;
+}
+
+/**
+ * Robust Bipartite Lane Assignment Solver
+ * Determines strictly unfilled lanes considering flex heroes.
+ */
+function getTeamOpenLanes(picks) {
+    const activeHeroes = (picks || []).filter(Boolean);
+    if (activeHeroes.length === 0) return [...ALL_LANES];
+
+    // Priority to single-role heroes first (e.g. Melissa -> Gold, Zetian -> Mid)
+    const singleRoleOccupied = new Set();
+    activeHeroes.forEach(hero => {
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+        if (lanes.length === 1) {
+            singleRoleOccupied.add(lanes[0]);
+        }
+    });
+
+    // Solve flex assignment
+    let maxCoverage = new Set(singleRoleOccupied);
+
+    function backtrack(idx, currentAssignment) {
+        if (idx === activeHeroes.length) {
+            if (currentAssignment.size > maxCoverage.size) {
+                maxCoverage = new Set(currentAssignment);
+            }
+            return;
+        }
+
+        const hero = activeHeroes[idx];
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+
+        for (const lane of lanes) {
+            if (!currentAssignment.has(lane)) {
+                currentAssignment.add(lane);
+                backtrack(idx + 1, currentAssignment);
+                currentAssignment.delete(lane);
+            }
+        }
+        // Also allow passing if over-indexed
+        backtrack(idx + 1, currentAssignment);
+    }
+
+    backtrack(0, new Set(singleRoleOccupied));
+
+    return ALL_LANES.filter(l => !maxCoverage.has(l));
 }
 
 function getRecommendations() {
     const turn = getCurrentTurn();
-    if (!turn) return { type: 'complete', list: [], neededLanes: [] };
+    if (!turn || draftState.isComplete) {
+        return { type: 'complete', list: [], neededLanes: [] };
+    }
 
     const availableHeroes = HERO_DATASET.filter(h => !isHeroUnavailable(h.id));
 
+    const activeTeam = turn.team;
+    const opponentTeam = activeTeam === 'A' ? 'B' : 'A';
+
+    const myPicks = draftState.picks[activeTeam] || [];
+    const oppPicks = draftState.picks[opponentTeam] || [];
+
+    const myOpenLanes = getTeamOpenLanes(myPicks);
+    const oppOpenLanes = getTeamOpenLanes(oppPicks);
+
+    // 1. BAN RECOMMENDATIONS (Strict Opponent Open Lane Denial)
     if (turn.action === 'ban') {
-        const sorted = [...availableHeroes].sort((a, b) => (b.banRate || 0) - (a.banRate || 0));
+        let banCandidates = availableHeroes;
+
+        // If opponent has already locked in lanes, ban ONLY heroes that map to their OPEN lanes
+        if (oppOpenLanes.length > 0 && oppOpenLanes.length < 5) {
+            const laneDenialCandidates = availableHeroes.filter(hero => {
+                const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+                return lanes.some(l => oppOpenLanes.includes(l));
+            });
+            if (laneDenialCandidates.length > 0) {
+                banCandidates = laneDenialCandidates;
+            }
+        }
+
+        const sorted = [...banCandidates].sort((a, b) => {
+            const scoreA = ((typeof getHeroBanRate === 'function' ? getHeroBanRate(a) : (a.banRate || 0)) * 0.7) +
+                           ((typeof getHeroPickRate === 'function' ? getHeroPickRate(a) : (a.pickRate || 0)) * 0.3);
+            const scoreB = ((typeof getHeroBanRate === 'function' ? getHeroBanRate(b) : (b.banRate || 0)) * 0.7) +
+                           ((typeof getHeroPickRate === 'function' ? getHeroPickRate(b) : (b.pickRate || 0)) * 0.3);
+            return scoreB - scoreA;
+        });
+
         return {
             type: 'ban',
             list: sorted.slice(0, 6),
-            neededLanes: []
+            neededLanes: oppOpenLanes
         };
     }
 
-    const myPicks = draftState.picks[turn.team] || [];
-    const coveredLanes = new Set();
-    myPicks.forEach(hero => {
-        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
-        lanes.forEach(l => coveredLanes.add(l));
-    });
+    // 2. PICK RECOMMENDATIONS (Strict Own-Team Open Lane Filling)
+    if (turn.action === 'pick') {
+        let pickCandidates = availableHeroes;
 
-    const neededLanes = ALL_LANES.filter(l => !coveredLanes.has(l));
-
-    let candidates = availableHeroes;
-    if (neededLanes.length > 0) {
-        const filtered = availableHeroes.filter(hero => {
-            const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
-            return lanes.some(l => neededLanes.includes(l));
-        });
-        if (filtered.length > 0) {
-            candidates = filtered;
+        // Strictly enforce: Candidates MUST be capable of filling one of the team's remaining open lanes
+        if (myOpenLanes.length > 0) {
+            const strictlyOpenLaneCandidates = availableHeroes.filter(hero => {
+                const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+                return lanes.some(l => myOpenLanes.includes(l));
+            });
+            if (strictlyOpenLaneCandidates.length > 0) {
+                pickCandidates = strictlyOpenLaneCandidates;
+            }
         }
+
+        const sorted = [...pickCandidates].sort((a, b) => {
+            const getBestScore = (hero) => {
+                const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+                const matchingOpen = lanes.filter(l => myOpenLanes.includes(l));
+                let roleScore = (typeof getHeroPickRate === 'function') ? getHeroPickRate(hero) : (hero.pickRate || 0);
+
+                matchingOpen.forEach(lane => {
+                    if (hero.roles && hero.roles[lane]) {
+                        roleScore = Math.max(roleScore, hero.roles[lane].pickRate || 0);
+                    }
+                });
+                return roleScore;
+            };
+
+            return getBestScore(b) - getBestScore(a);
+        });
+
+        return {
+            type: 'pick',
+            list: sorted.slice(0, 6),
+            neededLanes: myOpenLanes
+        };
     }
 
-    const sorted = [...candidates].sort((a, b) => {
-        const rateA = (typeof getHeroPickRate === 'function') ? getHeroPickRate(a) : 0;
-        const rateB = (typeof getHeroPickRate === 'function') ? getHeroPickRate(b) : 0;
-        return rateB - rateA;
-    });
-
-    return {
-        type: 'pick',
-        list: sorted.slice(0, 6),
-        neededLanes: neededLanes
-    };
+    return { type: 'complete', list: [], neededLanes: [] };
 }
 
 function evaluateTeamDraft(picks) {
@@ -103,37 +190,30 @@ function evaluateTeamDraft(picks) {
         return { score: 0, breakdown: [{ text: "No heroes selected", type: "neg" }], coveredLanes: [] };
     }
 
+    const safePicks = picks.filter(Boolean);
     const breakdown = [];
     let score = 0;
 
-    // 1. Meta Strength
-    const avgWinRate = picks.reduce((sum, h) => sum + (h.winRate || 50), 0) / picks.length;
+    const avgWinRate = safePicks.length ? safePicks.reduce((sum, h) => sum + (h.winRate || 50), 0) / safePicks.length : 50;
     const metaPts = Math.min(30, Math.round((avgWinRate - 45) * 4));
     score += metaPts;
     breakdown.push({ text: `Meta Win-Rate Rating: +${metaPts} pts (avg ${avgWinRate.toFixed(1)}%)`, type: "pos" });
 
-    // 2. Lane Coverage
-    const coveredLanes = new Set();
-    picks.forEach(h => {
-        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(h) : (hero.lanes || []);
-        lanes.forEach(l => coveredLanes.add(l));
-    });
-    const coveragePts = coveredLanes.size * 8;
+    const openLanes = getTeamOpenLanes(safePicks);
+    const coveredCount = 5 - openLanes.length;
+    const coveragePts = coveredCount * 8;
     score += coveragePts;
-    breakdown.push({ text: `Lane Coverage: +${coveragePts} pts (${coveredLanes.size}/5 unique roles)`, type: "pos" });
+    breakdown.push({ text: `Lane Coverage: +${coveragePts} pts (${coveredCount}/5 unique roles)`, type: "pos" });
 
-    // 3. Full 5-Role Bonus
-    if (coveredLanes.size >= 5) {
+    if (coveredCount >= 5) {
         score += 20;
         breakdown.push({ text: "Full 5-Role Balanced Lineup Bonus: +20 pts", type: "pos" });
     } else {
-        const missing = ALL_LANES.filter(l => !coveredLanes.has(l));
         score -= 15;
-        breakdown.push({ text: `Missing Required Roles (${missing.join(', ')}): -15 pts`, type: "neg" });
+        breakdown.push({ text: `Missing Required Roles (${openLanes.join(', ')}): -15 pts`, type: "neg" });
     }
 
-    // 4. Power Spike Curve
-    const spikes = picks.map(h => h.powerSpike || "Mid");
+    const spikes = safePicks.map(h => h.powerSpike || "Mid");
     const hasLate = spikes.includes("Late") || spikes.includes("All");
     const hasEarly = spikes.includes("Early") || spikes.includes("All");
     if (hasLate && hasEarly) {
@@ -146,18 +226,16 @@ function evaluateTeamDraft(picks) {
     return {
         score: score,
         breakdown: breakdown,
-        coveredLanes: Array.from(coveredLanes)
+        coveredLanes: ALL_LANES.filter(l => !openLanes.includes(l))
     };
 }
 
-/**
- * 8-Category Comparative Draft Evaluator
- * Evaluates Team A vs Team B across structural heuristics without declaring a definitive winner.
- */
 function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
-    const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
+    const safeA = (picksA || []).filter(Boolean);
+    const safeB = (picksB || []).filter(Boolean);
+    const safeBansA = (bansA || []).filter(Boolean);
+    const safeBansB = (bansB || []).filter(Boolean);
 
-    // Helper: Damage distribution analysis
     function getDamageProfile(picks) {
         let magic = 0, physical = 0;
         picks.forEach(hero => {
@@ -171,7 +249,6 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
         return { magic, physical, isBalanced };
     }
 
-    // Helper: Power curve spike counts
     function getPowerCurve(picks) {
         let early = 0, mid = 0, late = 0;
         picks.forEach(h => {
@@ -182,57 +259,47 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
         return { early, mid, late };
     }
 
-    // 1. Lane Coverage
-    const lanesA = new Set(picksA.flatMap(h => (typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])));
-    const lanesB = new Set(picksB.flatMap(h => (typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])));
-    const laneCountA = ALL_LANES.filter(l => lanesA.has(l)).length;
-    const laneCountB = ALL_LANES.filter(l => lanesB.has(l)).length;
+    const openLanesA = getTeamOpenLanes(safeA);
+    const openLanesB = getTeamOpenLanes(safeB);
+    const laneCountA = 5 - openLanesA.length;
+    const laneCountB = 5 - openLanesB.length;
 
-    // 2. Meta Strength (Average Win Rate)
-    const avgWinRateA = picksA.length ? picksA.reduce((sum, h) => sum + (h.winRate || 50), 0) / picksA.length : 50;
-    const avgWinRateB = picksB.length ? picksB.reduce((sum, h) => sum + (h.winRate || 50), 0) / picksB.length : 50;
+    const avgWinRateA = safeA.length ? safeA.reduce((sum, h) => sum + (h.winRate || 50), 0) / safeA.length : 50;
+    const avgWinRateB = safeB.length ? safeB.reduce((sum, h) => sum + (h.winRate || 50), 0) / safeB.length : 50;
 
-    // 3. Role Balance (Class Diversity)
-    const classesA = new Set(picksA.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
-    const classesB = new Set(picksB.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
+    const classesA = new Set(safeA.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
+    const classesB = new Set(safeB.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
     const classCountA = classesA.size;
     const classCountB = classesB.size;
 
-    // 4. Damage Type Diversity
-    const dmgA = getDamageProfile(picksA);
-    const dmgB = getDamageProfile(picksB);
+    const dmgA = getDamageProfile(safeA);
+    const dmgB = getDamageProfile(safeB);
 
-    // 5. Engage / Utility (Tank + Support count)
-    const engageCountA = picksA.filter(h => {
+    const engageCountA = safeA.filter(h => {
         const c = (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
         return c.includes('Tank') || c.includes('Support');
     }).length;
-    const engageCountB = picksB.filter(h => {
+    const engageCountB = safeB.filter(h => {
         const c = (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
         return c.includes('Tank') || c.includes('Support');
     }).length;
 
-    // 6. Flexibility (Multi-lane flex heroes)
-    const flexCountA = picksA.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
-    const flexCountB = picksB.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
+    const flexCountA = safeA.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
+    const flexCountB = safeB.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
 
-    // 7. Power Curve Stability
-    const curveA = getPowerCurve(picksA);
-    const curveB = getPowerCurve(picksB);
+    const curveA = getPowerCurve(safeA);
+    const curveB = getPowerCurve(safeB);
     const curveScoreA = (curveA.early >= 1 ? 1 : 0) + (curveA.mid >= 1 ? 1 : 0) + (curveA.late >= 1 ? 1 : 0);
     const curveScoreB = (curveB.early >= 1 ? 1 : 0) + (curveB.mid >= 1 ? 1 : 0) + (curveB.late >= 1 ? 1 : 0);
 
-    // 8. Ban Efficiency (Total Ban Rate of Banned Targets)
-    const banEffA = bansA.reduce((sum, h) => sum + (h.banRate || 0), 0);
-    const banEffB = bansB.reduce((sum, h) => sum + (h.banRate || 0), 0);
+    const banEffA = safeBansA.reduce((sum, h) => sum + (h.banRate || 0), 0);
+    const banEffB = safeBansB.reduce((sum, h) => sum + (h.banRate || 0), 0);
 
-    // Compute Overall Scores (Out of 100)
     let scoreA = Math.round((laneCountA * 6) + (avgWinRateA * 0.7) + (classCountA * 3) + (dmgA.isBalanced ? 10 : 4) + (engageCountA >= 1 ? 8 : 2) + (flexCountA * 2) + (curveScoreA * 3));
     let scoreB = Math.round((laneCountB * 6) + (avgWinRateB * 0.7) + (classCountB * 3) + (dmgB.isBalanced ? 10 : 4) + (engageCountB >= 1 ? 8 : 2) + (flexCountB * 2) + (curveScoreB * 3));
     scoreA = Math.min(100, Math.max(30, scoreA));
     scoreB = Math.min(100, Math.max(30, scoreB));
 
-    // Comparative Items Definition
     const categories = [
         {
             name: "Lane Coverage",
