@@ -781,6 +781,14 @@ function initDraftListeners() {
     btnCloseHistory?.addEventListener('click', () => {
         historyModal?.classList.add('hidden');
     });
+
+    // Inside initDraftListeners() in main.js
+    phaseBannerText?.addEventListener('click', () => {
+        if (draftState && draftState.isComplete) {
+            showPostDraftEvaluation();
+        }
+    });
+
 }
 
 function syncStagingLobbyUI(roomPayload) {
@@ -926,9 +934,14 @@ function updateAnnouncerHeadline(status, mode) {
 
     if (draftState.isComplete) {
         turnBannerText.textContent = 'DRAFT COMPLETE';
-        phaseBannerText.textContent = 'Review team evaluation details';
+        phaseBannerText.textContent = '📊 Click to Review Evaluation Details';
+        phaseBannerText.className = 'phase-badge evaluation-clickable-badge';
+        phaseBannerText.style.cursor = 'pointer';
         return;
     }
+
+    phaseBannerText.style.cursor = 'default';
+    phaseBannerText.className = 'phase-badge';
 
     const currentTurn = getCurrentTurn();
     if (!currentTurn) return;

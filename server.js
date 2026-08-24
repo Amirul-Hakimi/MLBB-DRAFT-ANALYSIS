@@ -87,15 +87,45 @@ function getRoomPlayersSummary(room) {
     };
 }
 
+const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
+
 function getOpenLanesForTeam(picks) {
-    const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
-    const filledLanes = new Set();
-    picks.forEach(hero => {
-        if (!hero) return;
+    const activeHeroes = (picks || []).filter(Boolean);
+    if (activeHeroes.length === 0) return [...ALL_LANES];
+
+    const singleRoleOccupied = new Set();
+    activeHeroes.forEach(hero => {
         const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
-        lanes.forEach(l => filledLanes.add(l));
+        if (lanes.length === 1) {
+            singleRoleOccupied.add(lanes[0]);
+        }
     });
-    return ALL_LANES.filter(l => !filledLanes.has(l));
+
+    let maxCoverage = new Set(singleRoleOccupied);
+
+    function backtrack(idx, currentAssignment) {
+        if (idx === activeHeroes.length) {
+            if (currentAssignment.size > maxCoverage.size) {
+                maxCoverage = new Set(currentAssignment);
+            }
+            return;
+        }
+
+        const hero = activeHeroes[idx];
+        const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
+
+        for (const lane of lanes) {
+            if (!currentAssignment.has(lane)) {
+                currentAssignment.add(lane);
+                backtrack(idx + 1, currentAssignment);
+                currentAssignment.delete(lane);
+            }
+        }
+        backtrack(idx + 1, currentAssignment);
+    }
+
+    backtrack(0, new Set(singleRoleOccupied));
+    return ALL_LANES.filter(l => !maxCoverage.has(l));
 }
 
 function recordCompletedDraft(room) {
@@ -215,40 +245,39 @@ function computeAIMoveForTeam(draftState, activeTeam) {
     const myOpenLanes = getOpenLanesForTeam(draftState.picks[activeTeam]);
     const opponentOpenLanes = getOpenLanesForTeam(draftState.picks[opponentTeam]);
 
-    // 1. AI BANNING: Deny the OPPONENT'S remaining open lanes
+    // 1. AI BANNING: Deny the opponent's unfilled lanes
     if (currentTurn.action === 'ban') {
         let banCandidates = availableHeroes;
 
-        // If opponent has already locked in some positions, restrict bans ONLY to heroes who can play in their OPEN lanes
         if (opponentOpenLanes.length > 0 && opponentOpenLanes.length < 5) {
-            const denialCandidates = availableHeroes.filter(hero => {
+            const laneDenialCandidates = availableHeroes.filter(hero => {
                 const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
                 return lanes.some(lane => opponentOpenLanes.includes(lane));
             });
-            if (denialCandidates.length > 0) {
-                banCandidates = denialCandidates;
+            if (laneDenialCandidates.length > 0) {
+                banCandidates = laneDenialCandidates;
             }
         }
 
         return selectWeightedRandomHero(banCandidates, h => getHeroBanRate(h));
     }
 
-    // 2. AI PICKING: Fill the AI'S OWN open lanes
+    // 2. AI PICKING: Strictly pick heroes that fit the team's remaining open lanes
     let pickCandidates = availableHeroes;
     if (myOpenLanes.length > 0) {
-        const laneCandidates = availableHeroes.filter(hero => {
+        const laneMatchingCandidates = availableHeroes.filter(hero => {
             const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
             return lanes.some(lane => myOpenLanes.includes(lane));
         });
-        if (laneCandidates.length > 0) {
-            pickCandidates = laneCandidates;
+        if (laneMatchingCandidates.length > 0) {
+            pickCandidates = laneMatchingCandidates;
         }
     }
 
     return selectWeightedRandomHero(pickCandidates, h => {
         if (myOpenLanes.length > 0) {
             const matchedLane = myOpenLanes.find(l => h.roles && h.roles[l]);
-            if (matchedLane) return h.roles[matchedLane].pickRate;
+            if (matchedLane) return h.roles[matchedLane].pickRate || getHeroPickRate(h);
         }
         return getHeroPickRate(h);
     });
