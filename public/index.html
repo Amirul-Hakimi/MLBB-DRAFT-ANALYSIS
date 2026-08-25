@@ -60,7 +60,7 @@
                         </div>
                         
                         <div class="mode-grid">
-                            <button id="btn-mode-ai" class="mode-card active">
+                            <button id="btn-mode-ai" class="mode-card active" type="button">
                                 <div class="mode-icon">🤖</div>
                                 <div class="mode-info">
                                     <span class="mode-title">Vs AI Practice</span>
@@ -68,7 +68,7 @@
                                 </div>
                             </button>
 
-                            <button id="btn-mode-sim" class="mode-card">
+                            <button id="btn-mode-sim" class="mode-card" type="button">
                                 <div class="mode-icon">⚡</div>
                                 <div class="mode-info">
                                     <span class="mode-title">AI vs AI</span>
@@ -76,7 +76,7 @@
                                 </div>
                             </button>
 
-                            <button id="btn-mode-create" class="mode-card">
+                            <button id="btn-mode-create" class="mode-card" type="button">
                                 <div class="mode-icon">🛡️</div>
                                 <div class="mode-info">
                                     <span class="mode-title">Create PvP Lobby</span>
@@ -84,7 +84,7 @@
                                 </div>
                             </button>
 
-                            <button id="btn-mode-join" class="mode-card">
+                            <button id="btn-mode-join" class="mode-card" type="button">
                                 <div class="mode-icon">⚔️</div>
                                 <div class="mode-info">
                                     <span class="mode-title">Join PvP Lobby</span>
@@ -106,12 +106,12 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <select id="music-track-select" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 6px;">
-                                    <option value="none">Mute</option>
                                     <option value="track1" selected>Lo-Fi Arena</option>
                                     <option value="track2">Synthwave Drive</option>
+                                    <option value="none">Mute</option>
                                 </select>
                                 <button type="button" id="btn-toggle-music" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 8px;">▶ Play</button>
-                                <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.3" style="width: 60px; accent-color: #f59e0b;">
+                                <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.4" style="width: 60px; accent-color: #f59e0b;">
                             </div>
                         </div>
 
@@ -137,7 +137,7 @@
                     <div class="share-label">SHARE ROOM CODE</div>
                     <div class="share-code-row">
                         <span id="lobby-room-code" class="share-code">------</span>
-                        <button id="btn-copy-code" class="btn btn-secondary btn-sm">📋 Copy</button>
+                        <button id="btn-copy-code" class="btn btn-secondary btn-sm" type="button">📋 Copy</button>
                     </div>
                     <span id="copy-toast" class="copy-toast hidden">Copied to clipboard!</span>
                 </div>
@@ -161,8 +161,8 @@
                 </div>
 
                 <div class="lobby-actions-footer">
-                    <button id="btn-lobby-leave" class="btn btn-outline-danger">Leave Lobby</button>
-                    <button id="btn-toggle-ready" class="btn btn-gold btn-large">
+                    <button id="btn-lobby-leave" class="btn btn-outline-danger" type="button">Leave Lobby</button>
+                    <button id="btn-toggle-ready" class="btn btn-gold btn-large" type="button">
                         <span id="ready-btn-text">READY UP</span>
                         <span class="btn-arrow">✓</span>
                     </button>
@@ -178,10 +178,10 @@
                     <span>AUTO-SIMULATION ENGINE</span>
                 </div>
                 <div class="sim-actions">
-                    <button id="btn-sim-step" class="btn btn-secondary btn-sm">▶ Step (+1 Turn)</button>
-                    <button id="btn-sim-auto" class="btn btn-gold btn-sm">⚡ Auto-Play</button>
-                    <button id="btn-sim-pause" class="btn btn-secondary btn-sm">⏸ Pause</button>
-                    <button id="btn-sim-reset" class="btn btn-danger btn-sm">🔄 Reset Draft</button>
+                    <button id="btn-sim-step" class="btn btn-secondary btn-sm" type="button">▶ Step (+1 Turn)</button>
+                    <button id="btn-sim-auto" class="btn btn-gold btn-sm" type="button">⚡ Auto-Play</button>
+                    <button id="btn-sim-pause" class="btn btn-secondary btn-sm" type="button">⏸ Pause</button>
+                    <button id="btn-sim-reset" class="btn btn-danger btn-sm" type="button">🔄 Reset Draft</button>
                 </div>
             </div>
 
@@ -204,13 +204,20 @@
                         <span id="room-display-tag">ROOM: ----</span>
                     </div>
 
-                    <!-- 30-Second Synchronized Countdown Clock -->
+                    <!-- 30-Second Countdown Clock -->
                     <div id="turn-timer-clock" style="font-family: 'Rajdhani', sans-serif; font-size: 2.2rem; font-weight: 800; color: #10b981; margin: 4px 0; text-shadow: 0 0 12px rgba(16,185,129,0.4);">
                         ⏱️ <span id="timer-seconds-display">30</span>s
                     </div>
 
                     <div id="turn-banner-text" class="turn-headline">READY TO DRAFT</div>
                     <div id="phase-banner-text" class="phase-badge">BAN PHASE 1</div>
+                    <!-- Replace this: -->
+<!-- <button type="button" id="btn-reopen-eval" class="btn-evaluation-reopen hidden" onclick="window.forceOpenEvaluationModal(event)"> -->
+
+<!-- With standard event listener target: -->
+<button type="button" id="btn-reopen-eval" class="btn-evaluation-reopen hidden">
+    📊 Click to Review Evaluation Details
+</button>
                     <div id="reset-status-banner" class="status-subtext hidden"></div>
                 </div>
 
@@ -247,53 +254,69 @@
 
             <!-- Hero Selector Section -->
             <div class="hero-selector-section">
-                <div class="filter-controls-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-                    <div class="search-and-mode-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-                        <div class="search-wrap" style="flex: 1; min-width: 200px;">
+                <div class="filter-controls-container">
+                    <div class="search-and-mode-row">
+                        <div class="search-wrap">
                             <span class="search-icon">🔍</span>
                             <input type="text" id="hero-search" placeholder="Filter heroes by name..." autocomplete="off">
                         </div>
                         
-                        <div class="filter-mode-switch" style="display: inline-flex; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 3px; gap: 4px;">
-                            <button type="button" class="btn btn-sm active" id="modeLaneBtn" style="font-weight: 700;">Map Lanes</button>
-                            <button type="button" class="btn btn-sm btn-secondary" id="modeRoleBtn" style="font-weight: 700;">Hero Classes</button>
+                        <div class="filter-mode-switch">
+                            <button type="button" class="btn btn-sm active" id="modeLaneBtn">Map Lanes</button>
+                            <button type="button" class="btn btn-sm btn-secondary" id="modeRoleBtn">Hero Classes</button>
                         </div>
                     </div>
 
-                    <div class="lane-filter-tabs" id="filterPillsContainer" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+                    <div class="lane-filter-tabs" id="filterPillsContainer"></div>
                 </div>
 
                 <div id="hero-grid" class="hero-grid"></div>
             </div>
 
-            <!-- Bottom Tools Grid: Ticker, PvP Chat & Actions -->
-            <div class="bottom-tools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 16px;">
+            <!-- Bottom Tools Grid -->
+            <div class="bottom-tools-grid">
                 <div class="draft-log-box">
                     <div class="log-header">📜 Chronological Action Ticker</div>
                     <ul id="draft-log-list" class="log-list"></ul>
                 </div>
 
                 <!-- In-Room Opponent Chat (Shown ONLY in PvP) -->
-                <div id="pvp-chat-card" class="pvp-chat-card hidden" style="background: #111927; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; height: 180px;">
-                    <div style="font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 0.95rem; color: #f59e0b; margin-bottom: 6px; display: flex; justify-content: space-between;">
-                        <span>💬 In-Room Opponent Chat</span>
-                        <span style="font-size: 0.7rem; color: #64748b;">Live Room Feed</span>
+                <div id="pvp-chat-card" class="pvp-chat-card hidden">
+                    <div class="chat-header">
+                        <span class="chat-title">💬 In-Room Opponent Chat</span>
+                        <span class="chat-subtitle">Live Room Feed</span>
                     </div>
-                    <div id="chat-messages-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; margin-bottom: 8px;">
-                        <span style="color: #64748b; font-style: italic;">Chat initialized. Say glhf!</span>
+                    <div id="chat-messages-container" class="chat-feed">
+                        <span class="chat-placeholder">Say something!</span>
                     </div>
-                    <form id="chat-form" style="display: flex; gap: 6px;">
-                        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="150" autocomplete="off" style="flex: 1; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.8rem;">
-                        <button type="submit" class="btn btn-gold btn-sm">Send</button>
+                    <form id="chat-form" class="chat-form">
+                        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="150" autocomplete="off" class="chat-input">
+                        <button type="submit" class="btn btn-gold btn-sm chat-send-btn">Send</button>
                     </form>
                 </div>
 
-                <div class="footer-actions" style="display: flex; flex-direction: column; justify-content: center; gap: 8px;">
-                    <button id="btn-manual-reset" class="btn btn-secondary">🔄 Reset Draft</button>
-                    <button id="btn-leave-room" class="btn btn-outline-danger">Exit Room</button>
+                <div class="footer-actions">
+                    <button type="button" id="btn-manual-reset" class="btn btn-secondary">🔄 Reset Draft</button>
+                    <button type="button" id="btn-leave-room" class="btn btn-outline-danger">Exit Room</button>
                 </div>
             </div>
         </section>
+
+        <!-- Reset Request Confirm Modal -->
+        <div id="reset-confirm-modal" class="modal-overlay hidden">
+            <div class="modal-card modal-sm">
+                <div class="modal-header text-center">
+                    <h2 class="glow-text">RESET DRAFT REQUEST</h2>
+                    <p id="reset-request-text" style="color: #cbd5e1; margin-top: 10px; font-size: 0.9rem;">
+                        The other player requested to reset this draft. Do you agree?
+                    </p>
+                </div>
+                <div class="modal-actions-dual" style="margin-top: 20px;">
+                    <button type="button" id="btn-accept-reset" class="btn btn-gold">✓ Accept Reset</button>
+                    <button type="button" id="btn-decline-reset" class="btn btn-outline-danger">✕ Decline</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Post-Draft Comparison Screen Modal -->
         <div id="post-draft-modal" class="modal-overlay hidden">
@@ -346,7 +369,7 @@
                     </div>
                 </div>
 
-                <div class="modal-actions-dual" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 16px;">
+                <div class="modal-actions-dual">
                     <button type="button" id="btn-rematch" class="btn btn-gold">🔄 Rematch</button>
                     <button type="button" id="btn-new-draft" class="btn btn-secondary">⚡ New Draft</button>
                     <button type="button" id="btn-return-lobby" class="btn btn-outline-danger">🏠 Return to Lobby</button>
@@ -371,9 +394,9 @@
             </div>
         </div>
 
-        <!-- Audio Sources for Lobby Music (CC0 Royalty-Free) -->
-        <audio id="bg-audio-track1" loop preload="none" src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3"></audio>
-        <audio id="bg-audio-track2" loop preload="none" src="https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=electronic-future-beats-117997.mp3"></audio>
+        <!-- Audio Sources for Lobby Music (High-Reliability Fallbacks) -->
+        <audio id="bg-audio-track1" loop preload="auto" src="https://actions.google.com/sounds/v1/ambiences/humming_room_tone.ogg"></audio>
+        <audio id="bg-audio-track2" loop preload="auto" src="https://actions.google.com/sounds/v1/science_fiction/space_ambience.ogg"></audio>
 
         <!-- Global Toast Notification -->
         <div id="app-toast" class="app-toast hidden">

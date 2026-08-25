@@ -37,6 +37,143 @@ let draftState = {
 
 const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
 
+// Counter Relationship Dataset (Sorted Alphabetically A-Z)
+const COUNTER_DATA = {
+  "Aamon": { "counteredBy": ["Cici", "Claude", "Hilda", "Marcel", "Zilong"] },
+  "Akai": { "counteredBy": ["Alucard", "Fredrinn", "Nana", "Saber", "Silvanna"] },
+  "Aldous": { "counteredBy": ["Belerick", "Helcurt", "Sun", "Uranus", "X.Borg"] },
+  "Alice": { "counteredBy": ["Atlas", "Chip", "Gloo", "Tigreal", "Zhask"] },
+  "Alpha": { "counteredBy": ["Barats", "Baxia", "Hilda", "Johnson", "Phoveus"] },
+  "Alucard": { "counteredBy": ["Cyclops", "Helcurt", "Mathilda", "Natalia", "Sun"] },
+  "Angela": { "counteredBy": ["Alice", "Balmond", "Faramis", "Lancelot", "Marcel"] },
+  "Argus": { "counteredBy": ["Dyrroth", "Helcurt", "Karrie", "Masha", "Saber"] },
+  "Arlott": { "counteredBy": ["Cici", "Khufra", "Natan", "X.Borg", "Zhuxin"] },
+  "Atlas": { "counteredBy": ["Aamon", "Eudora", "Layla", "Lolita", "Popol and Kupa"] },
+  "Aulus": { "counteredBy": ["Gloo", "Minsitthar", "Natalia", "Saber", "Sun"] },
+  "Aurora": { "counteredBy": ["Chip", "Estes", "Eudora", "Lolita", "Odette"] },
+  "Badang": { "counteredBy": ["Aldous", "Fanny", "Hayabusa", "Sun", "Zilong"] },
+  "Balmond": { "counteredBy": ["Barats", "Johnson", "Lukas", "Phoveus", "Saber"] },
+  "Bane": { "counteredBy": ["Baxia", "Faramis", "Khufra", "Odette", "Phoveus"] },
+  "Barats": { "counteredBy": ["Alucard", "Argus", "Brody", "Phoveus", "Silvanna"] },
+  "Baxia": { "counteredBy": ["Alice", "Claude", "Floryn", "Lukas", "Obsidia"] },
+  "Beatrix": { "counteredBy": ["Baxia", "Diggie", "Edith", "Estes", "Hanabi"] },
+  "Belerick": { "counteredBy": ["Kimmy", "Obsidia", "Saber", "Silvanna", "Zhask"] },
+  "Benedetta": { "counteredBy": ["Alpha", "Atlas", "Natan", "Silvanna", "X.Borg"] },
+  "Brody": { "counteredBy": ["Fanny", "Irithel", "Joy", "Karina", "Natalia"] },
+  "Bruno": { "counteredBy": ["Benedetta", "Fanny", "Harith", "Marcel", "Wanwan"] },
+  "Carmilla": { "counteredBy": ["Chip", "Estes", "Gloo", "Minotaur", "Popol and Kupa"] },
+  "Cecilion": { "counteredBy": ["Barats", "Baxia", "Hanabi", "Lolita", "Phoveus"] },
+  "Chang'e": { "counteredBy": ["Diggie", "Lancelot", "Lukas", "Masha", "X.Borg"] },
+  "Chip": { "counteredBy": ["Hanzo", "Helcurt", "Lolita", "Paquito", "Valentina"] },
+  "Chou": { "counteredBy": ["Beatrix", "Benedetta", "Fanny", "X.Borg", "Yve"] },
+  "Cici": { "counteredBy": ["Alice", "Balmond", "Fredrinn", "Hylos", "Thamuz"] },
+  "Claude": { "counteredBy": ["Chang'e", "Granger", "Ixia", "Lolita", "Yu Zhong"] },
+  "Clint": { "counteredBy": ["Belerick", "Karina", "Lolita", "Lunox", "Melissa"] },
+  "Cyclops": { "counteredBy": ["Aldous", "Ling", "Marcel", "Natalia", "Wanwan"] },
+  "Diggie": { "counteredBy": ["Alpha", "Balmond", "Hylos", "Saber", "Zilong"] },
+  "Dyrroth": { "counteredBy": ["Aldous", "Alice", "Esmeralda", "Natalia", "Uranus"] },
+  "Edith": { "counteredBy": ["Alice", "Claude", "Freya", "Harith", "Silvanna"] },
+  "Esmeralda": { "counteredBy": ["Diggie", "Lolita", "Marcel", "Mathilda", "Paquito"] },
+  "Estes": { "counteredBy": ["Alice", "Cici", "Cyclops", "Faramis", "Masha"] },
+  "Eudora": { "counteredBy": ["Floryn", "Irithel", "Marcel", "Rafaela", "Zilong"] },
+  "Fanny": { "counteredBy": ["Clint", "Gloo", "Granger", "Kimmy", "Yve"] },
+  "Faramis": { "counteredBy": ["Chip", "Gloo", "Obsidia", "Sun", "Wanwan"] },
+  "Floryn": { "counteredBy": ["Alice", "Faramis", "Ling", "Marcel", "X.Borg"] },
+  "Franco": { "counteredBy": ["Angela", "Benedetta", "Fanny", "Floryn", "Freya"] },
+  "Fredrinn": { "counteredBy": ["Alucard", "Argus", "Esmeralda", "Gloo", "Odette"] },
+  "Freya": { "counteredBy": ["Aulus", "Hanzo", "Lolita", "Sun", "Yve"] },
+  "Gatotkaca": { "counteredBy": ["Atlas", "Chip", "Hanabi", "Miya", "Odette"] },
+  "Gloo": { "counteredBy": ["Aamon", "Jawhead", "Johnson", "Karina", "Lesley"] },
+  "Gord": { "counteredBy": ["Barats", "Fredrinn", "Lolita", "Phoveus", "Terizla"] },
+  "Granger": { "counteredBy": ["Baxia", "Beatrix", "Diggie", "Karina", "Melissa"] },
+  "Grock": { "counteredBy": ["Baxia", "Lolita", "Odette", "Popol and Kupa", "Yin"] },
+  "Guinevere": { "counteredBy": ["Cici", "Esmeralda", "Julian", "Lunox", "Thamuz"] },
+  "Gusion": { "counteredBy": ["Aamon", "Gord", "Natalia", "Suyou", "Valir"] },
+  "Hanabi": { "counteredBy": ["Chip", "Kaja", "Moskov", "Popol and Kupa", "Saber"] },
+  "Hanzo": { "counteredBy": ["Diggie", "Franco", "Khufra", "Layla", "Saber"] },
+  "Harith": { "counteredBy": ["Irithel", "Johnson", "Lolita", "Suyou", "Zetian"] },
+  "Harley": { "counteredBy": ["Alice", "Joy", "Melissa", "Suyou", "Valir"] },
+  "Hayabusa": { "counteredBy": ["Aamon", "Karina", "Nolan", "Yve", "Zhuxin"] },
+  "Helcurt": { "counteredBy": ["Gord", "Kimmy", "Valir", "X.Borg", "Xavier"] },
+  "Hilda": { "counteredBy": ["Granger", "Harley", "Helcurt", "Nolan", "Novaria"] },
+  "Hirara": { "counteredBy": ["Baxia", "Hanzo", "Joy", "X.Borg", "Yin"] },
+  "Hylos": { "counteredBy": ["Johnson", "Khufra", "Layla", "Lukas", "Saber"] },
+  "Irithel": { "counteredBy": ["Beatrix", "Benedetta", "Minsitthar", "Wanwan", "Yin"] },
+  "Ixia": { "counteredBy": ["Cyclops", "Estes", "Floryn", "Lolita", "Rafaela"] },
+  "Jawhead": { "counteredBy": ["Arlott", "Dyrroth", "Helcurt", "Nolan", "Zilong"] },
+  "Johnson": { "counteredBy": ["Floryn", "Franco", "Layla", "Valentina", "Zilong"] },
+  "Joy": { "counteredBy": ["Hanabi", "Lolita", "Sun", "Uranus", "X.Borg"] },
+  "Julian": { "counteredBy": ["Alice", "Diggie", "Esmeralda", "Faramis", "Phoveus"] },
+  "Kadita": { "counteredBy": ["Ixia", "Johnson", "Lolita", "Odette", "Silvanna"] },
+  "Kagura": { "counteredBy": ["Lolita", "Silvanna", "Sun", "Vale", "X.Borg"] },
+  "Kaja": { "counteredBy": ["Baxia", "Beatrix", "Kagura", "Valir", "Wanwan"] },
+  "Kalea": { "counteredBy": ["Aldous", "Alucard", "Fanny", "Helcurt", "Zilong"] },
+  "Karina": { "counteredBy": ["Helcurt", "Kimmy", "Lolita", "Marcel", "Natalia"] },
+  "Karrie": { "counteredBy": ["Alice", "Aulus", "Balmond", "Leomord", "Terizla"] },
+  "Khaleed": { "counteredBy": ["Harley", "Nolan", "Vale", "Yin", "Zilong"] },
+  "Khufra": { "counteredBy": ["Alucard", "Beatrix", "Silvanna", "Wanwan", "Yin"] },
+  "Kimmy": { "counteredBy": ["Alpha", "Balmond", "Hanzo", "Hylos", "Sun"] },
+  "Lancelot": { "counteredBy": ["Alpha", "Atlas", "Baxia", "X.Borg", "Yin"] },
+  "Lapu-Lapu": { "counteredBy": ["Argus", "Masha", "Phoveus", "Popol and Kupa", "Silvanna"] },
+  "Layla": { "counteredBy": ["Edith", "Faramis", "Melissa", "Phoveus", "Rafaela"] },
+  "Leomord": { "counteredBy": ["Belerick", "Lolita", "Natalia", "Popol and Kupa", "Saber"] },
+  "Lesley": { "counteredBy": ["Belerick", "Bruno", "Claude", "Gatotkaca", "Marcel"] },
+  "Ling": { "counteredBy": ["Atlas", "Gloo", "Hanzo", "Valir", "X.Borg"] },
+  "Lolita": { "counteredBy": ["Chang'e", "Cyclops", "Edith", "Floryn", "Harley"] },
+  "Lukas": { "counteredBy": ["Arlott", "Fanny", "Ling", "Natalia", "Zilong"] },
+  "Lunox": { "counteredBy": ["Esmeralda", "Gloo", "Karina", "Natalia", "Wanwan"] },
+  "Luo Yi": { "counteredBy": ["Baxia", "Estes", "Faramis", "Popol and Kupa", "Uranus"] },
+  "Lylia": { "counteredBy": ["Alpha", "Baxia", "Diggie", "Hanabi", "Johnson"] },
+  "Marcel": { "counteredBy": ["Atlas", "Chip", "Kadita", "Khufra", "Martis"] },
+  "Martis": { "counteredBy": ["Alucard", "Chip", "Dyrroth", "Johnson", "Saber"] },
+  "Masha": { "counteredBy": ["Dyrroth", "Fanny", "Guinevere", "Wanwan", "Yu Zhong"] },
+  "Mathilda": { "counteredBy": ["Benedetta", "Granger", "Natalia", "Valir", "X.Borg"] },
+  "Melissa": { "counteredBy": ["Alucard", "Faramis", "Leomord", "Lolita", "Mathilda"] },
+  "Minotaur": { "counteredBy": ["Cyclops", "Khufra", "Lolita", "Odette", "Silvanna"] },
+  "Minsitthar": { "counteredBy": ["Freya", "Harith", "Lukas", "Martis", "Phoveus"] },
+  "Miya": { "counteredBy": ["Irithel", "Obsidia", "Saber", "Selena", "Silvanna"] },
+  "Moskov": { "counteredBy": ["Beatrix", "Fanny", "Gloo", "Joy", "Wanwan"] },
+  "Nana": { "counteredBy": ["Alucard", "Edith", "Estes", "Lolita", "Odette"] },
+  "Natalia": { "counteredBy": ["Ling", "Lolita", "Minsitthar", "Nolan", "Xavier"] },
+  "Natan": { "counteredBy": ["Esmeralda", "Gloo", "Sun", "Uranus", "Zhask"] },
+  "Nolan": { "counteredBy": ["Bane", "Estes", "Floryn", "Valir", "X.Borg"] },
+  "Novaria": { "counteredBy": ["Bane", "Diggie", "Kaja", "Marcel", "Valir"] },
+  "Obsidia": { "counteredBy": ["Beatrix", "Benedetta", "Fanny", "Helcurt", "Nolan"] },
+  "Odette": { "counteredBy": ["Hirara", "Kaja", "Marcel", "Mathilda", "Rafaela"] },
+  "Paquito": { "counteredBy": ["Aldous", "Karina", "Natalia", "Wanwan", "X.Borg"] },
+  "Pharsa": { "counteredBy": ["Hanabi", "Lolita", "Melissa", "Valir", "Yve"] },
+  "Phoveus": { "counteredBy": ["Alucard", "Freya", "Harith", "Ruby", "Wanwan"] },
+  "Popol and Kupa": { "counteredBy": ["Diggie", "Harith", "Harley", "Mathilda", "Zilong"] },
+  "Rafaela": { "counteredBy": ["Alice", "Karrie", "Marcel", "Natalia", "Valir"] },
+  "Roger": { "counteredBy": ["Aldous", "Gusion", "Harley", "Masha", "Yin"] },
+  "Ruby": { "counteredBy": ["Gloo", "Joy", "Lunox", "Masha", "Sun"] },
+  "Saber": { "counteredBy": ["Hirara", "Ling", "Lunox", "Natalia", "Nolan"] },
+  "Selena": { "counteredBy": ["Beatrix", "Benedetta", "Ixia", "X.Borg", "Yve"] },
+  "Silvanna": { "counteredBy": ["Aamon", "Aldous", "Angela", "Floryn", "Rafaela"] },
+  "Sora": { "counteredBy": ["Estes", "Karina", "Natan", "Popol and Kupa", "Rafaela"] },
+  "Sun": { "counteredBy": ["Cici", "Diggie", "Jawhead", "Lesley", "Masha"] },
+  "Suyou": { "counteredBy": ["Balmond", "Baxia", "Diggie", "Natalia", "Sun"] },
+  "Terizla": { "counteredBy": ["Argus", "Masha", "Phoveus", "Popol and Kupa", "Tigreal"] },
+  "Thamuz": { "counteredBy": ["Alice", "Alucard", "Dyrroth", "Lukas", "Masha"] },
+  "Tigreal": { "counteredBy": ["Estes", "Franco", "Lesley", "Lolita", "Zilong"] },
+  "Uranus": { "counteredBy": ["Argus", "Barats", "Masha", "Phoveus", "Yi Sun-shin"] },
+  "Valentina": { "counteredBy": ["Atlas", "Carmilla", "Grock", "Lolita", "X.Borg"] },
+  "Vale": { "counteredBy": ["Estes", "Melissa", "Odette", "Rafaela", "Silvanna"] },
+  "Valir": { "counteredBy": ["Alice", "Balmond", "Fredrinn", "Leomord", "Thamuz"] },
+  "Vexana": { "counteredBy": ["Alucard", "Chip", "Gloo", "Odette", "Zhask"] },
+  "Wanwan": { "counteredBy": ["Alpha", "Atlas", "Ixia", "Thamuz", "Yin"] },
+  "X.Borg": { "counteredBy": ["Barats", "Baxia", "Martis", "Phoveus", "Terizla"] },
+  "Xavier": { "counteredBy": ["Baxia", "Belerick", "Hylos", "Terizla", "Uranus"] },
+  "Yi Sun-shin": { "counteredBy": ["Benedetta", "Diggie", "Khufra", "Melissa", "Wanwan"] },
+  "Yin": { "counteredBy": ["Diggie", "Floryn", "Minsitthar", "Phoveus", "Silvanna"] },
+  "Yu Zhong": { "counteredBy": ["Atlas", "Carmilla", "Gloo", "Minsitthar", "Popol and Kupa"] },
+  "Yve": { "counteredBy": ["Alpha", "Balmond", "Lolita", "Minotaur", "X.Borg"] },
+  "Zetian": { "counteredBy": ["Helcurt", "Lolita", "Natalia", "Popol and Kupa", "Tigreal"] },
+  "Zhask": { "counteredBy": ["Arlott", "Chip", "Diggie", "Kaja", "Lolita"] },
+  "Zhuxin": { "counteredBy": ["Aamon", "Hanzo", "Hylos", "Khufra", "Lolita"] },
+  "Zilong": { "counteredBy": ["Angela", "Benedetta", "Cici", "Novaria", "X.Borg"] }
+};
+
 function getCurrentTurn() {
     if (!draftState || draftState.currentTurnIndex >= DRAFT_SEQUENCE.length) return null;
     return DRAFT_SEQUENCE[draftState.currentTurnIndex];
@@ -49,15 +186,10 @@ function isHeroUnavailable(heroId) {
     return isBanned || isPicked;
 }
 
-/**
- * Robust Bipartite Lane Assignment Solver
- * Determines strictly unfilled lanes considering flex heroes.
- */
 function getTeamOpenLanes(picks) {
     const activeHeroes = (picks || []).filter(Boolean);
     if (activeHeroes.length === 0) return [...ALL_LANES];
 
-    // Priority to single-role heroes first (e.g. Melissa -> Gold, Zetian -> Mid)
     const singleRoleOccupied = new Set();
     activeHeroes.forEach(hero => {
         const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
@@ -66,7 +198,6 @@ function getTeamOpenLanes(picks) {
         }
     });
 
-    // Solve flex assignment
     let maxCoverage = new Set(singleRoleOccupied);
 
     function backtrack(idx, currentAssignment) {
@@ -87,15 +218,20 @@ function getTeamOpenLanes(picks) {
                 currentAssignment.delete(lane);
             }
         }
-        // Also allow passing if over-indexed
         backtrack(idx + 1, currentAssignment);
     }
 
     backtrack(0, new Set(singleRoleOccupied));
-
     return ALL_LANES.filter(l => !maxCoverage.has(l));
 }
 
+function getHeroCounters(heroName) {
+    return (COUNTER_DATA[heroName] && COUNTER_DATA[heroName].counteredBy) || [];
+}
+
+/**
+ * Enhanced Recommendation Engine with Multi-Counter Intelligence (v2)
+ */
 function getRecommendations() {
     const turn = getCurrentTurn();
     if (!turn || draftState.isComplete) {
@@ -103,21 +239,19 @@ function getRecommendations() {
     }
 
     const availableHeroes = HERO_DATASET.filter(h => !isHeroUnavailable(h.id));
-
     const activeTeam = turn.team;
     const opponentTeam = activeTeam === 'A' ? 'B' : 'A';
 
-    const myPicks = draftState.picks[activeTeam] || [];
-    const oppPicks = draftState.picks[opponentTeam] || [];
+    const myPicks = (draftState.picks[activeTeam] || []).filter(Boolean);
+    const oppPicks = (draftState.picks[opponentTeam] || []).filter(Boolean);
 
     const myOpenLanes = getTeamOpenLanes(myPicks);
     const oppOpenLanes = getTeamOpenLanes(oppPicks);
 
-    // 1. BAN RECOMMENDATIONS (Strict Opponent Open Lane Denial)
+    // 1. BAN RECOMMENDATIONS (Multi-Target Protective Ban Boost >= 2 + Lane Denial)
     if (turn.action === 'ban') {
         let banCandidates = availableHeroes;
 
-        // If opponent has already locked in lanes, ban ONLY heroes that map to their OPEN lanes
         if (oppOpenLanes.length > 0 && oppOpenLanes.length < 5) {
             const laneDenialCandidates = availableHeroes.filter(hero => {
                 const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
@@ -129,11 +263,27 @@ function getRecommendations() {
         }
 
         const sorted = [...banCandidates].sort((a, b) => {
-            const scoreA = ((typeof getHeroBanRate === 'function' ? getHeroBanRate(a) : (a.banRate || 0)) * 0.7) +
-                           ((typeof getHeroPickRate === 'function' ? getHeroPickRate(a) : (a.pickRate || 0)) * 0.3);
-            const scoreB = ((typeof getHeroBanRate === 'function' ? getHeroBanRate(b) : (b.banRate || 0)) * 0.7) +
-                           ((typeof getHeroPickRate === 'function' ? getHeroPickRate(b) : (b.pickRate || 0)) * 0.3);
-            return scoreB - scoreA;
+            const calculateBanScore = (hero) => {
+                const baseBanRate = (typeof getHeroBanRate === 'function' ? getHeroBanRate(hero) : (hero.banRate || 0));
+                const basePickRate = (typeof getHeroPickRate === 'function' ? getHeroPickRate(hero) : (hero.pickRate || 0));
+                let score = (baseBanRate * 0.7) + (basePickRate * 0.3);
+
+                let threatenedPickCount = 0;
+                myPicks.forEach(myHero => {
+                    const countersToMyHero = getHeroCounters(myHero.name);
+                    if (countersToMyHero.includes(hero.name)) {
+                        threatenedPickCount++;
+                    }
+                });
+
+                if (threatenedPickCount >= 2) {
+                    score *= (1.5 + (threatenedPickCount * 0.25));
+                }
+
+                return score;
+            };
+
+            return calculateBanScore(b) - calculateBanScore(a);
         });
 
         return {
@@ -143,23 +293,34 @@ function getRecommendations() {
         };
     }
 
-    // 2. PICK RECOMMENDATIONS (Strict Own-Team Open Lane Filling)
+    // 2. PICK RECOMMENDATIONS (Multi-Target Counter Boost >= 2 & Risk Filter >= 3)
     if (turn.action === 'pick') {
         let pickCandidates = availableHeroes;
 
-        // Strictly enforce: Candidates MUST be capable of filling one of the team's remaining open lanes
         if (myOpenLanes.length > 0) {
-            const strictlyOpenLaneCandidates = availableHeroes.filter(hero => {
+            const laneMatchingCandidates = availableHeroes.filter(hero => {
                 const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
                 return lanes.some(l => myOpenLanes.includes(l));
             });
-            if (strictlyOpenLaneCandidates.length > 0) {
-                pickCandidates = strictlyOpenLaneCandidates;
+            if (laneMatchingCandidates.length > 0) {
+                pickCandidates = laneMatchingCandidates;
             }
         }
 
-        const sorted = [...pickCandidates].sort((a, b) => {
-            const getBestScore = (hero) => {
+        const safeCandidates = pickCandidates.filter(hero => {
+            const counters = getHeroCounters(hero.name);
+            const liveCounterCount = counters.filter(cName => {
+                const found = HERO_DATASET.find(h => h.name.toLowerCase() === cName.toLowerCase());
+                return found && !isHeroUnavailable(found.id);
+            }).length;
+
+            return liveCounterCount < 3;
+        });
+
+        const finalCandidates = safeCandidates.length > 0 ? safeCandidates : pickCandidates;
+
+        const sorted = [...finalCandidates].sort((a, b) => {
+            const calculatePickScore = (hero) => {
                 const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
                 const matchingOpen = lanes.filter(l => myOpenLanes.includes(l));
                 let roleScore = (typeof getHeroPickRate === 'function') ? getHeroPickRate(hero) : (hero.pickRate || 0);
@@ -169,10 +330,23 @@ function getRecommendations() {
                         roleScore = Math.max(roleScore, hero.roles[lane].pickRate || 0);
                     }
                 });
+
+                let counteredEnemyCount = 0;
+                oppPicks.forEach(oppHero => {
+                    const countersToEnemy = getHeroCounters(oppHero.name);
+                    if (countersToEnemy.includes(hero.name)) {
+                        counteredEnemyCount++;
+                    }
+                });
+
+                if (counteredEnemyCount >= 2) {
+                    roleScore *= (1.6 + (counteredEnemyCount * 0.3));
+                }
+
                 return roleScore;
             };
 
-            return getBestScore(b) - getBestScore(a);
+            return calculatePickScore(b) - calculatePickScore(a);
         });
 
         return {
@@ -284,6 +458,7 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
         return c.includes('Tank') || c.includes('Support');
     }).length;
 
+    // Track multi-role heroes using the current iteration value to avoid runtime errors in the category comparison.
     const flexCountA = safeA.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
     const flexCountB = safeB.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
 
@@ -363,5 +538,13 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { evaluateDraftComparison, evaluateTeamDraft, DRAFT_SEQUENCE };
+    module.exports = { 
+        evaluateDraftComparison, 
+        evaluateTeamDraft, 
+        DRAFT_SEQUENCE, 
+        getRecommendations, 
+        getTeamOpenLanes, 
+        COUNTER_DATA,
+        getHeroCounters 
+    };
 }

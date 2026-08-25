@@ -31,7 +31,9 @@ let cachedRecommendedIds = new Set();
 let turnTimerInterval = null;
 let remainingTurnSeconds = 30;
 let audioCtx = null;
-let activeAudioElement = null;
+let isSynthPlaying = false;
+let synthInterval = null;
+let synthGain = null;
 
 const LANE_FILTERS = [
     { label: 'ALL', key: 'ALL' },
@@ -58,7 +60,7 @@ let connectionStatus, connDot, connLabel;
 let btnModeAi, btnModeSim, btnModeCreate, btnModeJoin, joinInputGroup, roomIdInput, btnEnterRoom;
 let lobbyRoomCode, btnCopyCode, copyToast, lobbyPlayerAName, lobbyPlayerBName, lobbyPlayerAStatus, lobbyPlayerBStatus, btnLobbyLeave, btnToggleReady, readyBtnText;
 let simControlBar, btnSimStep, btnSimAuto, btnSimPause, btnSimReset;
-let blueBans, redBans, bluePicks, redPicks, roomDisplayTag, turnBannerText, phaseBannerText, resetStatusBanner;
+let blueBans, redBans, bluePicks, redPicks, roomDisplayTag, turnBannerText, phaseBannerText, btnReopenEval, resetStatusBanner;
 let timelineStrip, recommendationPanel, recTitleText, recChipsContainer;
 let heroSearchInput, filterPillsContainer, modeLaneBtn, modeRoleBtn, heroGrid;
 let draftLogList, btnManualReset, btnLeaveRoom;
@@ -69,7 +71,7 @@ let disconnectModal, disconnectCountdown, btnLeaveNow;
 let pvpChatCard;
 
 // =========================================================================
-// SYNTHESIZED WEB AUDIO API
+// SYNTHESIZED WEB AUDIO API (NO EXTERNAL ASSET DEPENDENCIES)
 // =========================================================================
 function getAudioContext() {
     if (!audioCtx) {
@@ -132,104 +134,115 @@ function playTimesUpSound() {
 }
 
 // =========================================================================
-// AUTHORITATIVE 30-SECOND TURN TIMER (ANTI-CHEAT / ANTI-REFRESH)
+// PROCEDURAL LO-FI / SYNTHWAVE MUSIC GENERATOR
 // =========================================================================
-function startTurnTimer() {
-    clearInterval(turnTimerInterval);
-    if (!draftState || draftState.isComplete || !draftState.started || window.currentRoomMode === 'auto_sim') {
-        const timerClock = document.getElementById('turn-timer-clock');
-        if (timerClock && draftState && draftState.isComplete) {
-            timerClock.innerHTML = `⏱️ <span id="timer-seconds-display">0</span>s`;
-            timerClock.style.color = '#64748b';
-        }
-        return;
+function startProceduralMusic(trackType = 'track1') {
+    stopProceduralMusic();
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+        ctx.resume();
     }
 
-    const timerDisplay = document.getElementById('timer-seconds-display');
-    const timerClock = document.getElementById('turn-timer-clock');
+    synthGain = ctx.createGain();
+    const volumeSlider = document.getElementById('music-volume');
+    const volumeLevel = volumeSlider ? parseFloat(volumeSlider.value) : 0.4;
+    synthGain.gain.setValueAtTime(Math.max(0.02, volumeLevel * 0.18), ctx.currentTime);
+    synthGain.connect(ctx.destination);
 
-    function syncTick() {
-        if (!draftState.turnExpiresAt) {
-            remainingTurnSeconds = 30;
-        } else {
-            // Compute real-time server expiration delta
-            remainingTurnSeconds = Math.max(0, Math.ceil((draftState.turnExpiresAt - Date.now()) / 1000));
-        }
+    // Lo-Fi Chord Notes (Gmaj7 -> Em7 -> Cmaj7 -> D7)
+    const loFiChords = [
+        [196.00, 246.94, 293.66, 370.00], // G, B, D, F#
+        [164.81, 196.00, 246.94, 293.66], // E, G, B, D
+        [130.81, 164.81, 196.00, 246.94], // C, E, G, B
+        [146.83, 185.00, 220.00, 261.63]  // D, F#, A, C
+    ];
 
-        if (timerDisplay) timerDisplay.textContent = remainingTurnSeconds;
-        if (timerClock) {
-            if (remainingTurnSeconds <= 5) {
-                timerClock.style.color = '#ef4444';
-            } else if (remainingTurnSeconds <= 10) {
-                timerClock.style.color = '#f59e0b';
+    // Synthwave Pulse Arp
+    const synthBass = [110.00, 146.83, 164.81, 196.00, 220.00, 196.00, 164.81, 146.83];
+    let step = 0;
+    isSynthPlaying = true;
+
+    synthInterval = setInterval(() => {
+        if (!isSynthPlaying || !audioCtx) return;
+        try {
+            const now = ctx.currentTime;
+            if (trackType === 'track1') {
+                const chord = loFiChords[Math.floor(step / 4) % loFiChords.length];
+                chord.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const noteGain = ctx.createGain();
+                    osc.type = idx === 0 ? 'sine' : 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+                    noteGain.gain.setValueAtTime(0.05, now);
+                    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
+                    osc.connect(noteGain);
+                    noteGain.connect(synthGain);
+                    osc.start(now);
+                    osc.stop(now + 1.6);
+                });
             } else {
-                timerClock.style.color = '#10b981';
+                const freq = synthBass[step % synthBass.length];
+                const osc = ctx.createOscillator();
+                const noteGain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, now);
+                noteGain.gain.setValueAtTime(0.08, now);
+                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+                osc.connect(noteGain);
+                noteGain.connect(synthGain);
+                osc.start(now);
+                osc.stop(now + 0.3);
             }
-        }
-
-        if (remainingTurnSeconds <= 5 && remainingTurnSeconds > 0) {
-            playTickSound();
-        }
-
-        if (remainingTurnSeconds <= 0) {
-            clearInterval(turnTimerInterval);
-            playTimesUpSound();
-        }
-    }
-
-    syncTick();
-    turnTimerInterval = setInterval(syncTick, 1000);
+            step++;
+        } catch (e) {}
+    }, trackType === 'track1' ? 800 : 300);
 }
 
-// =========================================================================
-// LOBBY BACKGROUND MUSIC CONTROLLER
-// =========================================================================
+function stopProceduralMusic() {
+    if (synthInterval) {
+        clearInterval(synthInterval);
+        synthInterval = null;
+    }
+    isSynthPlaying = false;
+}
+
 function initMusicPlayer() {
     const btnToggle = document.getElementById('btn-toggle-music');
     const selectTrack = document.getElementById('music-track-select');
     const volumeSlider = document.getElementById('music-volume');
 
-    function updateAudioTrack() {
-        if (activeAudioElement) {
-            activeAudioElement.pause();
-            activeAudioElement.currentTime = 0;
-        }
-
-        const selectedVal = selectTrack?.value;
-        if (selectedVal === 'track1') {
-            activeAudioElement = document.getElementById('bg-audio-track1');
-        } else if (selectedVal === 'track2') {
-            activeAudioElement = document.getElementById('bg-audio-track2');
-        } else {
-            activeAudioElement = null;
-        }
-
-        if (activeAudioElement && volumeSlider) {
-            activeAudioElement.volume = parseFloat(volumeSlider.value);
-            activeAudioElement.play().catch(() => {});
-            if (btnToggle) btnToggle.textContent = '⏸ Pause';
-        } else {
-            if (btnToggle) btnToggle.textContent = '▶ Play';
-        }
-    }
-
     btnToggle?.addEventListener('click', () => {
-        if (!activeAudioElement) {
-            updateAudioTrack();
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+
+        const selectedVal = selectTrack?.value || 'track1';
+        if (selectedVal === 'none') {
+            stopProceduralMusic();
+            if (btnToggle) btnToggle.textContent = '▶ Play';
             return;
         }
-        if (activeAudioElement.paused) {
-            activeAudioElement.play().catch(() => {});
-            btnToggle.textContent = '⏸ Pause';
+
+        if (isSynthPlaying) {
+            stopProceduralMusic();
+            if (btnToggle) btnToggle.textContent = '▶ Play';
         } else {
-            activeAudioElement.pause();
-            btnToggle.textContent = '▶ Play';
+            startProceduralMusic(selectedVal);
+            if (btnToggle) btnToggle.textContent = '⏸ Pause';
         }
     });
 
-    selectTrack?.addEventListener('change', updateAudioTrack);
+    selectTrack?.addEventListener('change', () => {
+        if (isSynthPlaying) {
+            startProceduralMusic(selectTrack.value);
+        }
+    });
+
     volumeSlider?.addEventListener('input', (e) => {
-        if (activeAudioElement) activeAudioElement.volume = parseFloat(e.target.value);
+        if (synthGain && audioCtx) {
+            synthGain.gain.setValueAtTime(parseFloat(e.target.value) * 0.18, audioCtx.currentTime);
+        }
     });
 }
 
@@ -264,6 +277,89 @@ function initChatController() {
         chatContainer.scrollTop = chatContainer.scrollHeight;
     });
 }
+
+// =========================================================================
+// AUTHORITATIVE 30-SECOND TURN TIMER
+// =========================================================================
+function startTurnTimer() {
+    clearInterval(turnTimerInterval);
+    if (!draftState || draftState.isComplete || !draftState.started || window.currentRoomMode === 'auto_sim') {
+        const timerClock = document.getElementById('turn-timer-clock');
+        if (timerClock && draftState && draftState.isComplete) {
+            timerClock.innerHTML = `⏱️ <span id="timer-seconds-display">0</span>s`;
+            timerClock.style.color = '#64748b';
+        }
+        return;
+    }
+
+    const timerDisplay = document.getElementById('timer-seconds-display');
+    const timerClock = document.getElementById('turn-timer-clock');
+
+    function syncTick() {
+        if (!draftState.turnExpiresAt) {
+            remainingTurnSeconds = 30;
+        } else {
+            remainingTurnSeconds = Math.max(0, Math.ceil((draftState.turnExpiresAt - Date.now()) / 1000));
+        }
+
+        if (timerDisplay) timerDisplay.textContent = remainingTurnSeconds;
+        if (timerClock) {
+            if (remainingTurnSeconds <= 5) {
+                timerClock.style.color = '#ef4444';
+            } else if (remainingTurnSeconds <= 10) {
+                timerClock.style.color = '#f59e0b';
+            } else {
+                timerClock.style.color = '#10b981';
+            }
+        }
+
+        if (remainingTurnSeconds <= 5 && remainingTurnSeconds > 0) {
+            playTickSound();
+        }
+
+        if (remainingTurnSeconds <= 0) {
+            clearInterval(turnTimerInterval);
+            playTimesUpSound();
+        }
+    }
+
+    syncTick();
+    turnTimerInterval = setInterval(syncTick, 1000);
+}
+
+// =========================================================================
+// GLOBAL POST-DRAFT EVALUATION CONTROLLER (RELIABLE DISPLAY OVERRIDE)
+// =========================================================================
+window.forceOpenEvaluationModal = function(e) {
+    if (e && e.preventDefault) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const modal = document.getElementById('post-draft-modal');
+    if (!modal) return;
+    
+    showPostDraftEvaluation();
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('active-modal');
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
+    modal.style.setProperty('visibility', 'visible', 'important');
+    modal.style.setProperty('pointer-events', 'auto', 'important');
+};
+
+window.openPostDraftModal = window.forceOpenEvaluationModal;
+
+window.closePostDraftModal = function() {
+    const modal = document.getElementById('post-draft-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('active-modal');
+    modal.style.setProperty('display', 'none', 'important');
+    modal.style.setProperty('opacity', '0', 'important');
+    modal.style.setProperty('visibility', 'hidden', 'important');
+    modal.style.setProperty('pointer-events', 'none', 'important');
+};
 
 // Toast Notification
 function showToast(message, type = 'error', durationMs = 3000) {
@@ -390,6 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
     roomDisplayTag = document.getElementById('room-display-tag');
     turnBannerText = document.getElementById('turn-banner-text');
     phaseBannerText = document.getElementById('phase-banner-text');
+    btnReopenEval = document.getElementById('btn-reopen-eval');
     resetStatusBanner = document.getElementById('reset-status-banner');
 
     timelineStrip = document.getElementById('timeline-strip');
@@ -589,24 +686,21 @@ function buildInitialHeroGrid() {
             </div>
         `;
 
+        card.addEventListener('click', () => {
+            if (card.classList.contains('disabled') || isSubmittingAction) return;
+            const heroId = card.dataset.heroId;
+            if (!heroId || isHeroUnavailable(heroId)) return;
+
+            playClickSound();
+            isSubmittingAction = true;
+            socket.emit('select_hero', { heroId: heroId });
+        });
+
         heroCardNodeCache.set(hero.id, card);
         fragment.appendChild(card);
     });
 
     heroGrid.appendChild(fragment);
-
-    heroGrid.addEventListener('click', (e) => {
-        const card = e.target.closest('.hero-card');
-        if (!card || card.classList.contains('disabled') || isSubmittingAction) return;
-
-        const heroId = card.dataset.heroId;
-        if (!heroId || isHeroUnavailable(heroId)) return;
-
-        playClickSound();
-        isSubmittingAction = true;
-        socket.emit('select_hero', { heroId: heroId });
-    });
-
     updateHeroGridState();
 }
 
@@ -760,16 +854,16 @@ function initDraftListeners() {
     });
 
     btnCloseModal?.addEventListener('click', () => {
-        postDraftModal?.classList.add('hidden');
+        window.closePostDraftModal();
     });
 
     btnRematch?.addEventListener('click', () => {
-        postDraftModal?.classList.add('hidden');
+        window.closePostDraftModal();
         socket.emit('request_rematch');
     });
 
     btnNewDraft?.addEventListener('click', () => {
-        postDraftModal?.classList.add('hidden');
+        window.closePostDraftModal();
         socket.emit('request_reset');
     });
 
@@ -782,13 +876,11 @@ function initDraftListeners() {
         historyModal?.classList.add('hidden');
     });
 
-    // Inside initDraftListeners() in main.js
-    phaseBannerText?.addEventListener('click', () => {
-        if (draftState && draftState.isComplete) {
-            showPostDraftEvaluation();
-        }
+    btnReopenEval?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.openPostDraftModal();
     });
-
 }
 
 function syncStagingLobbyUI(roomPayload) {
@@ -838,7 +930,6 @@ function syncDraftArenaUI(roomPayload) {
         }
     }
 
-    // Strict PvP-Only Chat display rule
     if (pvpChatCard) {
         if (mode === 'pvp') {
             pvpChatCard.classList.remove('hidden');
@@ -932,15 +1023,23 @@ function renderPickList(container, picks, teamKey) {
 function updateAnnouncerHeadline(status, mode) {
     if (!turnBannerText || !phaseBannerText) return;
 
-    if (draftState.isComplete) {
+    const isComplete = draftState && draftState.isComplete;
+
+    if (isComplete) {
         turnBannerText.textContent = 'DRAFT COMPLETE';
-        phaseBannerText.textContent = '📊 Click to Review Evaluation Details';
-        phaseBannerText.className = 'phase-badge evaluation-clickable-badge';
-        phaseBannerText.style.cursor = 'pointer';
+        phaseBannerText.classList.add('hidden');
+        if (btnReopenEval) {
+            btnReopenEval.classList.remove('hidden');
+        }
         return;
     }
 
-    phaseBannerText.style.cursor = 'default';
+    // STRICT: Keep evaluation button hidden during the active draft
+    if (btnReopenEval) {
+        btnReopenEval.classList.add('hidden');
+    }
+
+    phaseBannerText.classList.remove('hidden');
     phaseBannerText.className = 'phase-badge';
 
     const currentTurn = getCurrentTurn();
@@ -1021,36 +1120,45 @@ function showPostDraftEvaluation() {
     const state = (typeof draftState !== 'undefined' && draftState) ? draftState : currentDraftState;
     if (!state) return;
 
-    const picksA = (state.picks?.A || []).filter(Boolean);
-    const bansA = (state.bans?.A || []).filter(Boolean);
-    const picksB = (state.picks?.B || []).filter(Boolean);
-    const bansB = (state.bans?.B || []).filter(Boolean);
+    const picksA = (state.picks?.A || []).filter(h => h && h.id && !h.isSkipped);
+    const bansA = (state.bans?.A || []).filter(h => h && h.id && !h.isSkipped);
+    const picksB = (state.picks?.B || []).filter(h => h && h.id && !h.isSkipped);
+    const bansB = (state.bans?.B || []).filter(h => h && h.id && !h.isSkipped);
 
-    const evalResult = (typeof evaluateDraftComparison === 'function')
-        ? evaluateDraftComparison(picksA, bansA, picksB, bansB)
-        : { scoreA: 75, scoreB: 75, categories: [] };
+    let evalResult;
+    try {
+        if (typeof evaluateDraftComparison === 'function') {
+            evalResult = evaluateDraftComparison(picksA, bansA, picksB, bansB);
+        } else {
+            evalResult = { scoreA: 80, scoreB: 80, categories: [] };
+        }
+    } catch (err) {
+        console.warn('Evaluation fallback engaged:', err);
+        evalResult = { scoreA: 80, scoreB: 80, categories: [] };
+    }
 
     const scoreAEl = document.getElementById('eval-score-a');
     const scoreBEl = document.getElementById('eval-score-b');
     const tagAEl = document.getElementById('advantage-tag-a');
     const tagBEl = document.getElementById('advantage-tag-b');
 
-    if (scoreAEl) scoreAEl.textContent = evalResult.scoreA;
-    if (scoreBEl) scoreBEl.textContent = evalResult.scoreB;
+    if (scoreAEl) scoreAEl.textContent = evalResult.scoreA || 0;
+    if (scoreBEl) scoreBEl.textContent = evalResult.scoreB || 0;
 
+    // Neutral, non-predictive draft advantage phrasing (Never says "Team A will win")
     if (evalResult.scoreA > evalResult.scoreB) {
-        if (tagAEl) { tagAEl.textContent = '⭐ Draft Advantage'; tagAEl.className = 'score-advantage-tag active'; }
-        if (tagBEl) { tagBEl.textContent = 'Strategic Parity'; tagBEl.className = 'score-advantage-tag'; }
+        if (tagAEl) { tagAEl.textContent = 'Draft Advantage'; tagAEl.className = 'score-advantage-tag active'; }
+        if (tagBEl) { tagBEl.textContent = 'Evenly Matched'; tagBEl.className = 'score-advantage-tag'; }
     } else if (evalResult.scoreB > evalResult.scoreA) {
-        if (tagBEl) { tagBEl.textContent = '⭐ Draft Advantage'; tagBEl.className = 'score-advantage-tag active'; }
-        if (tagAEl) { tagAEl.textContent = 'Strategic Parity'; tagAEl.className = 'score-advantage-tag'; }
+        if (tagBEl) { tagBEl.textContent = 'Draft Advantage'; tagBEl.className = 'score-advantage-tag active'; }
+        if (tagAEl) { tagAEl.textContent = 'Evenly Matched'; tagAEl.className = 'score-advantage-tag'; }
     } else {
         if (tagAEl) { tagAEl.textContent = 'Evenly Matched'; tagAEl.className = 'score-advantage-tag'; }
         if (tagBEl) { tagBEl.textContent = 'Evenly Matched'; tagBEl.className = 'score-advantage-tag'; }
     }
 
     const matrixContainer = document.getElementById('comparison-matrix-list');
-    if (matrixContainer) {
+    if (matrixContainer && Array.isArray(evalResult.categories)) {
         matrixContainer.innerHTML = '';
         evalResult.categories.forEach(cat => {
             const row = document.createElement('div');
@@ -1093,6 +1201,11 @@ function showPostDraftEvaluation() {
     if (bansBContainer) bansBContainer.innerHTML = `<span class="sub-label">Bans:</span> ` + (bansB.map(h => `<span class="lineup-ban-name">${h.name}</span>`).join(', ') || 'None');
 
     modal.classList.remove('hidden');
+    modal.classList.add('active-modal');
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
+    modal.style.setProperty('visibility', 'visible', 'important');
+    modal.style.setProperty('pointer-events', 'auto', 'important');
 }
 
 // Sockets
@@ -1247,6 +1360,8 @@ socket.on('draft_error', (data) => {
 
 socket.on('reset_requested', () => {
     resetConfirmModal?.classList.remove('hidden');
+    resetConfirmModal?.classList.add('active-modal');
+    resetConfirmModal?.style.setProperty('display', 'flex', 'important');
 });
 
 socket.on('reset_declined', (data) => {

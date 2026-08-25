@@ -9,7 +9,7 @@
 
 const RAW_HERO_DATASET = [
     // ==========================================
-    // 
+    // A
     // ==========================================
     { id: "aamon", name: "Aamon", heroClass: ["Assassin"], roles: { Jungle: { pickRate: 0.30 } }, banRate: 0.10, winRate: 50.84, powerSpike: "Mid", image: "/assets/heroes/aamon.png" },
     { id: "akai", name: "Akai", heroClass: ["Tank"], roles: { Jungle: { pickRate: 0.45 }, Roam: { pickRate: 0.20 } }, banRate: 10.00, winRate: 49.10, powerSpike: "Mid", image: "/assets/heroes/akai.png" },
@@ -29,7 +29,7 @@ const RAW_HERO_DATASET = [
     // ==========================================
     { id: "badang", name: "Badang", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.80 }, Roam: { pickRate: 0.60 } }, banRate: 1.97, winRate: 50.28, powerSpike: "Mid", image: "/assets/heroes/badang.png" },
     { id: "balmond", name: "Balmond", heroClass: ["Fighter"], roles: { Jungle: { pickRate: 0.15 }, EXP: { pickRate: 0.10 } }, banRate: 0.02, winRate: 46.57, powerSpike: "Early", image: "/assets/heroes/balmond.png" },
-    { id: "bane", name: "Bane", heroClass: ["Fighter", "Mage"], roles: { EXP: { pickRate: 0.05 }, Jungle: { pickRate: 0.10 } }, banRate: 0.03, winRate: 50.97, powerSpike: "Mid", image: "/assets/heroes/bane.png" },
+    { id: "bane", name: "Bane", heroClass: ["Fighter", "Mage"], roles: { EXP: { pickRate: 0.03 }, Jungle: { pickRate: 0.03 } }, banRate: 0.03, winRate: 50.97, powerSpike: "Mid", image: "/assets/heroes/bane.png" },
     { id: "barats", name: "Barats", heroClass: ["Tank", "Fighter"], roles: { Jungle: { pickRate: 0.50 }, EXP: { pickRate: 0.30 } }, banRate: 2.86, winRate: 52.73, powerSpike: "Mid", image: "/assets/heroes/barats.png" },
     { id: "baxia", name: "Baxia", heroClass: ["Tank"], roles: { Jungle: { pickRate: 0.10 }, Roam: { pickRate: 0.03 } }, banRate: 0.03, winRate: 46.27, powerSpike: "Mid", image: "/assets/heroes/baxia.png" },
     { id: "beatrix", name: "Beatrix", heroClass: ["Marksman"], roles: { Gold: { pickRate: 1.00 } }, banRate: 0.8, winRate: 50.58, powerSpike: "All", image: "/assets/heroes/beatrix.png" },
@@ -49,7 +49,7 @@ const RAW_HERO_DATASET = [
     { id: "cici", name: "Cici", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.25 } }, banRate: 0.10, winRate: 45.76, powerSpike: "Mid", image: "/assets/heroes/cici.png" },
     { id: "claude", name: "Claude", heroClass: ["Marksman"], roles: { Gold: { pickRate: 0.80 } }, banRate: 0.15, winRate: 47.45, powerSpike: "Late", image: "/assets/heroes/claude.png" },
     { id: "clint", name: "Clint", heroClass: ["Marksman"], roles: { Gold: { pickRate: 0.85 } }, banRate: 0.20, winRate: 48.67, powerSpike: "Mid", image: "/assets/heroes/clint.png" },
-    { id: "cyclops", name: "Cyclops", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.15 }, Jungle: { pickRate: 0.05 } }, banRate: 0.02, winRate: 50.30, powerSpike: "Mid", image: "/assets/heroes/cyclops.png" },
+    { id: "cyclops", name: "Cyclops", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.15 }, Jungle: { pickRate: 0.05 } }, banRate: 0.01, winRate: 50.30, powerSpike: "Mid", image: "/assets/heroes/cyclops.png" },
 
     // ==========================================
     // D
