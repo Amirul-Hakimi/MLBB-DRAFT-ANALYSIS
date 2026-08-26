@@ -249,6 +249,9 @@ function playMelodyNote(ctx, freq, time, dur, dest, isChime = false) {
 // -------------------------------------------------------------------------
 // MULTI-GENRE COMPOSITIONS (Lo-Fi Chill, Synthwave, Deep Drone, Space Ambience)
 // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// HIGH-ENERGY ESPORTS PROCEDURAL MUSIC COMPOSITIONS
+// -------------------------------------------------------------------------
 function startProceduralMusic(trackType = 'track1') {
     stopProceduralMusic();
     const ctx = getAudioContext();
@@ -259,10 +262,10 @@ function startProceduralMusic(trackType = 'track1') {
     synthGain = ctx.createGain();
     const volumeSlider = document.getElementById('music-volume');
     const volumeLevel = volumeSlider ? parseFloat(volumeSlider.value) : 0.4;
-    synthGain.gain.setValueAtTime(Math.max(0.03, volumeLevel * 0.7), ctx.currentTime);
+    synthGain.gain.setValueAtTime(Math.max(0.03, volumeLevel * 0.6), ctx.currentTime);
     synthGain.connect(ctx.destination);
 
-    // Track 1: Lo-Fi Chill Beats Scale & Chords (Key: F Major / D Minor)
+    // Track 1: Lo-Fi Chill Beats (Key: F Major / D Minor)
     const loFiMelody = [349.23, 392.00, 440.00, 523.25, 587.33, 698.46, 587.33, 523.25, 440.00, 0, 392.00, 349.23, 440.00, 0, 523.25, 0];
     const loFiBass = [174.61, 0, 174.61, 0, 146.83, 0, 146.83, 0, 130.81, 0, 130.81, 0, 116.54, 0, 130.81, 0];
 
@@ -270,50 +273,23 @@ function startProceduralMusic(trackType = 'track1') {
     const synthwaveArp = [220.00, 261.63, 329.63, 440.00, 329.63, 261.63, 220.00, 261.63, 196.00, 246.94, 293.66, 392.00, 293.66, 246.94, 196.00, 246.94];
     const synthwaveBass = [55.00, 55.00, 110.00, 55.00, 55.00, 55.00, 110.00, 55.00, 49.00, 49.00, 98.00, 49.00, 43.65, 43.65, 87.31, 43.65];
 
-    // Track 3: Humming Room Ambient (Binaural Harmonic Drone)
-    if (trackType === 'track3') {
-        const baseFreqs = [55.00, 110.00, 164.81, 220.00];
-        baseFreqs.forEach((freq, idx) => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, ctx.currentTime);
-            osc.detune.setValueAtTime((idx % 2 === 0 ? 3 : -3), ctx.currentTime);
-            g.gain.setValueAtTime(0.08 / (idx + 1), ctx.currentTime);
-            osc.connect(g);
-            g.connect(synthGain);
-            osc.start();
-            padOscs.push({ pad1: osc, padGain: g });
-        });
-        isSynthPlaying = true;
-        isMusicPlaying = true;
-        return;
-    }
+    // Track 3: MPL Tournament Anthem (High Hype Stadium Dance, Key: C Minor / Eb Major)
+    const anthemLead = [261.63, 311.13, 392.00, 523.25, 466.16, 392.00, 311.13, 392.00, 349.23, 392.00, 466.16, 523.25, 587.33, 523.25, 466.16, 392.00];
+    const anthemChords = [261.63, 0, 261.63, 311.13, 233.08, 0, 233.08, 349.23, 207.65, 0, 207.65, 311.13, 233.08, 0, 261.63, 0];
 
-    // Track 4: Space Odyssey Ambience (Shimmering Ethereal Pad)
-    if (trackType === 'track4') {
-        const spacePitches = [130.81, 196.00, 293.66, 392.00, 493.88];
-        spacePitches.forEach((freq, idx) => {
-            const osc = ctx.createOscillator();
-            const g = ctx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, ctx.currentTime);
-            g.gain.setValueAtTime(0.04, ctx.currentTime);
-            osc.connect(g);
-            g.connect(synthGain);
-            osc.start();
-            padOscs.push({ pad1: osc, padGain: g });
-        });
-        isSynthPlaying = true;
-        isMusicPlaying = true;
-        return;
-    }
+    // Track 4: Neo Cyber Rush (Fast-Paced Electro / DnB, Key: E Minor)
+    const dnbArp = [329.63, 392.00, 493.88, 587.33, 659.25, 493.88, 392.00, 493.88, 293.66, 369.99, 440.00, 587.33, 440.00, 369.99, 440.00, 493.88];
+    const dnbBass = [82.41, 0, 82.41, 164.81, 0, 82.41, 0, 164.81, 73.42, 0, 73.42, 146.83, 0, 73.42, 0, 146.83];
 
     let step = 0;
     isSynthPlaying = true;
     isMusicPlaying = true;
 
-    const tempoMs = trackType === 'track1' ? 180 : 130; // 83 BPM (Lo-Fi) vs 115 BPM (Synthwave)
+    // Set tempo based on track genre
+    let tempoMs = 180; // Lo-Fi
+    if (trackType === 'track2') tempoMs = 130; // Synthwave
+    if (trackType === 'track3') tempoMs = 125; // MPL Anthem (120 BPM)
+    if (trackType === 'track4') tempoMs = 90;  // Neo Cyber Rush (166 BPM DnB feel)
 
     synthInterval = setInterval(() => {
         if (!isSynthPlaying || !audioCtx) return;
@@ -321,24 +297,53 @@ function startProceduralMusic(trackType = 'track1') {
             const now = ctx.currentTime;
             const beatStep = step % 16;
 
+            // 1. LO-FI CHILL
             if (trackType === 'track1') {
-                // Lo-Fi Drums (Boom-Bap Pattern)
                 if (beatStep === 0 || beatStep === 6 || beatStep === 10) playKick(ctx, now, synthGain);
                 if (beatStep === 4 || beatStep === 12) playSnare(ctx, now, synthGain);
                 if (beatStep % 2 === 0) playHiHat(ctx, now, synthGain, beatStep === 14);
 
-                // Lo-Fi Bass & Melody
                 if (loFiBass[beatStep] > 0) playSynthBass(ctx, loFiBass[beatStep], now, 0.35, synthGain, true);
                 if (loFiMelody[beatStep] > 0) playMelodyNote(ctx, loFiMelody[beatStep], now, 0.45, synthGain, true);
-            } else if (trackType === 'track2') {
-                // Synthwave 4-on-the-floor kick & pumping snare
+            } 
+            // 2. SYNTHWAVE DRIVE
+            else if (trackType === 'track2') {
                 if (beatStep % 4 === 0) playKick(ctx, now, synthGain);
                 if (beatStep === 4 || beatStep === 12) playSnare(ctx, now, synthGain);
                 playHiHat(ctx, now, synthGain, beatStep % 4 === 2);
 
-                // Driving Bassline & Fast Neon Arpeggios
                 playSynthBass(ctx, synthwaveBass[beatStep], now, 0.15, synthGain, false);
                 playMelodyNote(ctx, synthwaveArp[beatStep], now, 0.12, synthGain, false);
+            }
+            // 3. MPL TOURNAMENT ANTHEM (Stadium EDM / Festival Vibe)
+            else if (trackType === 'track3') {
+                // Driving EDM 4-on-the-floor beat
+                if (beatStep % 4 === 0) playKick(ctx, now, synthGain);
+                if (beatStep === 4 || beatStep === 12) playSnare(ctx, now, synthGain);
+                playHiHat(ctx, now, synthGain, beatStep % 2 === 1);
+
+                // Punchy brass chord stab
+                if (anthemChords[beatStep] > 0) {
+                    playSynthBass(ctx, anthemChords[beatStep] / 2, now, 0.22, synthGain, false);
+                }
+                // Anthemic festival lead
+                if (anthemLead[beatStep] > 0) {
+                    playMelodyNote(ctx, anthemLead[beatStep], now, 0.18, synthGain, false);
+                }
+            }
+            // 4. NEO CYBER RUSH (High-Octane Drum & Bass)
+            else if (trackType === 'track4') {
+                // Breakbeat drum pattern: Kick on 0, 10; Snare on 4, 12; rapid rolling hats
+                if (beatStep === 0 || beatStep === 10) playKick(ctx, now, synthGain);
+                if (beatStep === 4 || beatStep === 12) playSnare(ctx, now, synthGain);
+                playHiHat(ctx, now, synthGain, beatStep % 4 === 2);
+
+                // Reese rolling sub-bass
+                if (dnbBass[beatStep] > 0) {
+                    playSynthBass(ctx, dnbBass[beatStep], now, 0.11, synthGain, false);
+                }
+                // Fast arpeggiated synth run
+                playMelodyNote(ctx, dnbArp[beatStep], now, 0.08, synthGain, false);
             }
             step++;
         } catch (e) {}
