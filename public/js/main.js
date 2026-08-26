@@ -32,8 +32,11 @@ let turnTimerInterval = null;
 let remainingTurnSeconds = 30;
 let audioCtx = null;
 let isSynthPlaying = false;
+let isMusicPlaying = false; // general music play state (synth or html audio)
 let synthInterval = null;
 let synthGain = null;
+let padOscs = []; // active pad oscillators for richer procedural texture
+let proceduralNoiseBuffer = null; // noise buffer used for hi-hats/percussion
 
 const LANE_FILTERS = [
     { label: 'ALL', key: 'ALL' },
@@ -71,7 +74,7 @@ let disconnectModal, disconnectCountdown, btnLeaveNow;
 let pvpChatCard;
 
 // =========================================================================
-// SYNTHESIZED WEB AUDIO API (NO EXTERNAL ASSET DEPENDENCIES)
+// SYNTHESIZED WEB AUDIO ENGINE (RICH 16-STEP PROCEDURAL MUSIC)
 // =========================================================================
 function getAudioContext() {
     if (!audioCtx) {
@@ -133,69 +136,213 @@ function playTimesUpSound() {
     } catch (e) {}
 }
 
-// =========================================================================
-// PROCEDURAL LO-FI / SYNTHWAVE MUSIC GENERATOR
-// =========================================================================
+// -------------------------------------------------------------------------
+// HIGH-FIDELITY SYNTHETIC PERCUSSION & INSTRUMENT HELPERS
+// -------------------------------------------------------------------------
+function playKick(ctx, time, dest) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.setValueAtTime(140, time);
+    osc.frequency.exponentialRampToValueAtTime(38, time + 0.08);
+    gain.gain.setValueAtTime(0.8, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(time);
+    osc.stop(time + 0.25);
+}
+
+function playSnare(ctx, time, dest) {
+    // Noise snap
+    if (!proceduralNoiseBuffer) {
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+        proceduralNoiseBuffer = buf;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = proceduralNoiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(1000, time);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.4, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(dest);
+    noise.start(time);
+    noise.stop(time + 0.2);
+
+    // Body tone
+    const osc = ctx.createOscillator();
+    const toneGain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, time);
+    osc.frequency.exponentialRampToValueAtTime(60, time + 0.08);
+    toneGain.gain.setValueAtTime(0.3, time);
+    toneGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+    osc.connect(toneGain);
+    toneGain.connect(dest);
+    osc.start(time);
+    osc.stop(time + 0.12);
+}
+
+function playHiHat(ctx, time, dest, isOpen = false) {
+    if (!proceduralNoiseBuffer) {
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+        proceduralNoiseBuffer = buf;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = proceduralNoiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(7500, time);
+    const gain = ctx.createGain();
+    const dur = isOpen ? 0.2 : 0.045;
+    gain.gain.setValueAtTime(isOpen ? 0.25 : 0.15, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+    noise.start(time);
+    noise.stop(time + dur + 0.01);
+}
+
+function playSynthBass(ctx, freq, time, dur, dest, isLoFi = false) {
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    
+    osc.type = isLoFi ? 'sine' : 'sawtooth';
+    osc.frequency.setValueAtTime(freq, time);
+    
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(isLoFi ? 350 : 800, time);
+    filter.frequency.exponentialRampToValueAtTime(isLoFi ? 150 : 250, time + dur);
+
+    gain.gain.setValueAtTime(0.4, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+    osc.start(time);
+    osc.stop(time + dur + 0.05);
+}
+
+function playMelodyNote(ctx, freq, time, dur, dest, isChime = false) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = isChime ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(freq, time);
+    gain.gain.setValueAtTime(isChime ? 0.18 : 0.25, time);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(time);
+    osc.stop(time + dur + 0.05);
+}
+
+// -------------------------------------------------------------------------
+// MULTI-GENRE COMPOSITIONS (Lo-Fi Chill, Synthwave, Deep Drone, Space Ambience)
+// -------------------------------------------------------------------------
 function startProceduralMusic(trackType = 'track1') {
     stopProceduralMusic();
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
-        ctx.resume();
+        try { ctx.resume(); } catch (e) {}
     }
 
     synthGain = ctx.createGain();
     const volumeSlider = document.getElementById('music-volume');
     const volumeLevel = volumeSlider ? parseFloat(volumeSlider.value) : 0.4;
-    synthGain.gain.setValueAtTime(Math.max(0.02, volumeLevel * 0.18), ctx.currentTime);
+    synthGain.gain.setValueAtTime(Math.max(0.03, volumeLevel * 0.7), ctx.currentTime);
     synthGain.connect(ctx.destination);
 
-    // Lo-Fi Chord Notes (Gmaj7 -> Em7 -> Cmaj7 -> D7)
-    const loFiChords = [
-        [196.00, 246.94, 293.66, 370.00], // G, B, D, F#
-        [164.81, 196.00, 246.94, 293.66], // E, G, B, D
-        [130.81, 164.81, 196.00, 246.94], // C, E, G, B
-        [146.83, 185.00, 220.00, 261.63]  // D, F#, A, C
-    ];
+    // Track 1: Lo-Fi Chill Beats Scale & Chords (Key: F Major / D Minor)
+    const loFiMelody = [349.23, 392.00, 440.00, 523.25, 587.33, 698.46, 587.33, 523.25, 440.00, 0, 392.00, 349.23, 440.00, 0, 523.25, 0];
+    const loFiBass = [174.61, 0, 174.61, 0, 146.83, 0, 146.83, 0, 130.81, 0, 130.81, 0, 116.54, 0, 130.81, 0];
 
-    // Synthwave Pulse Arp
-    const synthBass = [110.00, 146.83, 164.81, 196.00, 220.00, 196.00, 164.81, 146.83];
+    // Track 2: Cyberpunk Synthwave (Key: A Minor, Driving 16th Arp)
+    const synthwaveArp = [220.00, 261.63, 329.63, 440.00, 329.63, 261.63, 220.00, 261.63, 196.00, 246.94, 293.66, 392.00, 293.66, 246.94, 196.00, 246.94];
+    const synthwaveBass = [55.00, 55.00, 110.00, 55.00, 55.00, 55.00, 110.00, 55.00, 49.00, 49.00, 98.00, 49.00, 43.65, 43.65, 87.31, 43.65];
+
+    // Track 3: Humming Room Ambient (Binaural Harmonic Drone)
+    if (trackType === 'track3') {
+        const baseFreqs = [55.00, 110.00, 164.81, 220.00];
+        baseFreqs.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            osc.detune.setValueAtTime((idx % 2 === 0 ? 3 : -3), ctx.currentTime);
+            g.gain.setValueAtTime(0.08 / (idx + 1), ctx.currentTime);
+            osc.connect(g);
+            g.connect(synthGain);
+            osc.start();
+            padOscs.push({ pad1: osc, padGain: g });
+        });
+        isSynthPlaying = true;
+        isMusicPlaying = true;
+        return;
+    }
+
+    // Track 4: Space Odyssey Ambience (Shimmering Ethereal Pad)
+    if (trackType === 'track4') {
+        const spacePitches = [130.81, 196.00, 293.66, 392.00, 493.88];
+        spacePitches.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            g.gain.setValueAtTime(0.04, ctx.currentTime);
+            osc.connect(g);
+            g.connect(synthGain);
+            osc.start();
+            padOscs.push({ pad1: osc, padGain: g });
+        });
+        isSynthPlaying = true;
+        isMusicPlaying = true;
+        return;
+    }
+
     let step = 0;
     isSynthPlaying = true;
+    isMusicPlaying = true;
+
+    const tempoMs = trackType === 'track1' ? 180 : 130; // 83 BPM (Lo-Fi) vs 115 BPM (Synthwave)
 
     synthInterval = setInterval(() => {
         if (!isSynthPlaying || !audioCtx) return;
         try {
             const now = ctx.currentTime;
+            const beatStep = step % 16;
+
             if (trackType === 'track1') {
-                const chord = loFiChords[Math.floor(step / 4) % loFiChords.length];
-                chord.forEach((freq, idx) => {
-                    const osc = ctx.createOscillator();
-                    const noteGain = ctx.createGain();
-                    osc.type = idx === 0 ? 'sine' : 'triangle';
-                    osc.frequency.setValueAtTime(freq, now);
-                    noteGain.gain.setValueAtTime(0.05, now);
-                    noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
-                    osc.connect(noteGain);
-                    noteGain.connect(synthGain);
-                    osc.start(now);
-                    osc.stop(now + 1.6);
-                });
-            } else {
-                const freq = synthBass[step % synthBass.length];
-                const osc = ctx.createOscillator();
-                const noteGain = ctx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(freq, now);
-                noteGain.gain.setValueAtTime(0.08, now);
-                noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
-                osc.connect(noteGain);
-                noteGain.connect(synthGain);
-                osc.start(now);
-                osc.stop(now + 0.3);
+                // Lo-Fi Drums (Boom-Bap Pattern)
+                if (beatStep === 0 || beatStep === 6 || beatStep === 10) playKick(ctx, now, synthGain);
+                if (beatStep === 4 || beatStep === 12) playSnare(ctx, now, synthGain);
+                if (beatStep % 2 === 0) playHiHat(ctx, now, synthGain, beatStep === 14);
+
+                // Lo-Fi Bass & Melody
+                if (loFiBass[beatStep] > 0) playSynthBass(ctx, loFiBass[beatStep], now, 0.35, synthGain, true);
+                if (loFiMelody[beatStep] > 0) playMelodyNote(ctx, loFiMelody[beatStep], now, 0.45, synthGain, true);
+            } else if (trackType === 'track2') {
+                // Synthwave 4-on-the-floor kick & pumping snare
+                if (beatStep % 4 === 0) playKick(ctx, now, synthGain);
+                if (beatStep === 4 || beatStep === 12) playSnare(ctx, now, synthGain);
+                playHiHat(ctx, now, synthGain, beatStep % 4 === 2);
+
+                // Driving Bassline & Fast Neon Arpeggios
+                playSynthBass(ctx, synthwaveBass[beatStep], now, 0.15, synthGain, false);
+                playMelodyNote(ctx, synthwaveArp[beatStep], now, 0.12, synthGain, false);
             }
             step++;
         } catch (e) {}
-    }, trackType === 'track1' ? 800 : 300);
+    }, tempoMs);
 }
 
 function stopProceduralMusic() {
@@ -203,7 +350,16 @@ function stopProceduralMusic() {
         clearInterval(synthInterval);
         synthInterval = null;
     }
+    try {
+        padOscs.forEach(p => {
+            try { if (p.pad1) p.pad1.stop(); } catch (e) {}
+            try { if (p.pad2) p.pad2.stop(); } catch (e) {}
+            try { if (p.padGain) p.padGain.disconnect(); } catch (e) {}
+        });
+    } catch (e) {}
+    padOscs = [];
     isSynthPlaying = false;
+    isMusicPlaying = false;
 }
 
 function initMusicPlayer() {
@@ -224,7 +380,7 @@ function initMusicPlayer() {
             return;
         }
 
-        if (isSynthPlaying) {
+        if (isMusicPlaying) {
             stopProceduralMusic();
             if (btnToggle) btnToggle.textContent = '▶ Play';
         } else {
@@ -234,14 +390,14 @@ function initMusicPlayer() {
     });
 
     selectTrack?.addEventListener('change', () => {
-        if (isSynthPlaying) {
+        if (isMusicPlaying) {
             startProceduralMusic(selectTrack.value);
         }
     });
 
     volumeSlider?.addEventListener('input', (e) => {
         if (synthGain && audioCtx) {
-            synthGain.gain.setValueAtTime(parseFloat(e.target.value) * 0.18, audioCtx.currentTime);
+            synthGain.gain.setValueAtTime(parseFloat(e.target.value) * 0.7, audioCtx.currentTime);
         }
     });
 }

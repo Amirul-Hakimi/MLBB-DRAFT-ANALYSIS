@@ -106,10 +106,14 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <select id="music-track-select" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 6px;">
-                                    <option value="track1" selected>Lo-Fi Arena</option>
-                                    <option value="track2">Synthwave Drive</option>
+                                    <option value="track1" selected>Lo-Fi Arena (Procedural)</option>
+                                    <option value="track2">Synthwave Drive (Procedural)</option>
+                                    <option value="track3">Humming Room (Ambient)</option>
+                                    <option value="track4">Space Ambience (Ambient)</option>
+                                    <option value="track5">Custom URL...</option>
                                     <option value="none">Mute</option>
                                 </select>
+                                <input type="text" id="music-custom-url" class="hidden" placeholder="Paste direct audio URL (mp3/ogg)" style="width:200px; padding:4px; font-size:0.75rem; display:none;" />
                                 <button type="button" id="btn-toggle-music" class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 3px 8px;">▶ Play</button>
                                 <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.4" style="width: 60px; accent-color: #f59e0b;">
                             </div>
