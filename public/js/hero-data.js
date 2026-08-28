@@ -49,7 +49,7 @@ const RAW_HERO_DATASET = [
     { id: "cici", name: "Cici", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.25 } }, banRate: 0.10, winRate: 45.76, powerSpike: "Mid", image: "/assets/heroes/cici.png" },
     { id: "claude", name: "Claude", heroClass: ["Marksman"], roles: { Gold: { pickRate: 0.80 } }, banRate: 0.15, winRate: 47.45, powerSpike: "Late", image: "/assets/heroes/claude.png" },
     { id: "clint", name: "Clint", heroClass: ["Marksman"], roles: { Gold: { pickRate: 0.85 } }, banRate: 0.20, winRate: 48.67, powerSpike: "Mid", image: "/assets/heroes/clint.png" },
-    { id: "cyclops", name: "Cyclops", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.15 }, Jungle: { pickRate: 0.05 } }, banRate: 0.01, winRate: 50.30, powerSpike: "Mid", image: "/assets/heroes/cyclops.png" },
+    { id: "cyclops", name: "Cyclops", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.10 }, Jungle: { pickRate: 0.05 } }, banRate: 0.01, winRate: 50.30, powerSpike: "Mid", image: "/assets/heroes/cyclops.png" },
 
     // ==========================================
     // D

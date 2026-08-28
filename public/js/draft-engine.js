@@ -1,3 +1,7 @@
+// =========================================================================
+// MLBB DRAFT ENGINE & HEURISTIC EVALUATION SYSTEM (draft-engine.js)
+// =========================================================================
+
 // Master Draft Sequence (20-Step Snake Draft)
 const DRAFT_SEQUENCE = [
     { turn: 1,  phase: 'Ban Phase 1',  action: 'ban',  team: 'A' },
@@ -298,7 +302,7 @@ const COUNTER_DATA = {
     "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Kaja", "Franco", "Joy"]
   },
   "Marcel": {
-    "counteredBy": ["Baxia", "Karrie", "Valir", "Saber", "Kaja", "Franco", "Dyrroth", "Lunox", "Claude","Obsidia"]
+    "counteredBy": ["Baxia", "Karrie", "Valir", "Saber", "Kaja", "Franco", "Dyrroth", "Lunox", "Claude", "Obsidia"]
   },
   "Martis": {
     "counteredBy": ["Valir", "Karrie", "Dyrroth", "Phoveus", "Franco", "Kaja", "Baxia", "Lunox", "Claude", "Ruby"]
@@ -394,7 +398,7 @@ const COUNTER_DATA = {
     "counteredBy": ["Diggie", "Valir", "Akai", "Wanwan", "Claude", "Karrie", "Lunox", "Franco", "Kaja", "Grock"]
   },
   "Uranus": {
-    "counteredBy": ["Baxia", "Karrie", "Dyrroth", "Lunox", "Valir", "Claude", "X.Borg", "Sun", "Gord", "Wanwan","Esmeralda"]
+    "counteredBy": ["Baxia", "Karrie", "Dyrroth", "Lunox", "Valir", "Claude", "X.Borg", "Sun", "Gord", "Wanwan", "Esmeralda"]
   },
   "Valentina": {
     "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Kaja", "Franco"]
@@ -443,9 +447,35 @@ const COUNTER_DATA = {
   }
 };
 
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { COUNTER_DATA };
-}
+// Recognized Competitive Combo Pairs / Synergies
+const TEAM_SYNERGIES = [
+    // Wombocombo CC + AoE Magic Burst
+    { pair: ["Tigreal", "Odette"], desc: "Implosion into Swan Song AoE wipe" },
+    { pair: ["Atlas", "Pharsa"], desc: "Fatal Links pull into Feathered Airstrike" },
+    { pair: ["Atlas", "Odette"], desc: "Fatal Links pull into Swan Song" },
+    { pair: ["Tigreal", "Pharsa"], desc: "Implosion into Feathered Airstrike" },
+    { pair: ["Guinevere", "Minotaur"], desc: "Chained airborne knock-up lockdown" },
+    { pair: ["Grock", "Novaria"], desc: "Wild Charge pin into Astral Echo sniping" },
+    { pair: ["Ruby", "Luo Yi"], desc: "Be Good pull into Duality Yin/Yang explosion" },
+    { pair: ["Carmilla", "Cecilion"], desc: "Moonlit Waltz & Curse of Blood link combo" },
+
+    // Hypercarry + Attack Speed / Shield Buffer
+    { pair: ["Angela", "Ling"], desc: "Heartguard mobile dive and invulnerability shield" },
+    { pair: ["Angela", "Claude"], desc: "Heartguard into Blazing Duet backline sweep" },
+    { pair: ["Angela", "Fanny"], desc: "Heartguard high-mobility energy cable sustain" },
+    { pair: ["Angela", "Leomord"], desc: "Heartguard mounted phantom burst rampage" },
+    { pair: ["Mathilda", "Claude"], desc: "Guiding Wind engagement mobility tether" },
+    { pair: ["Floryn", "X.Borg"], desc: "Bloom anti-heal negation and Firaga Armor sustain" },
+    { pair: ["Diggie", "Claude"], desc: "Time Journey CC immunity into Blazing Duet" },
+
+    // CC Catch / Displacement Combos
+    { pair: ["Franco", "Kaja"], desc: "Dual suppression single-target pickoff" },
+    { pair: ["Khufra", "Wanwan"], desc: "Bouncing Ball dash denial to trigger Crossbow" },
+    { pair: ["Lolita", "Beatrix"], desc: "Guardian's Bulwark projectile screen for sniper" },
+    { pair: ["Chou", "Saber"], desc: "Isolation kick into Triple Sweep execution" },
+    { pair: ["Hylos", "Valir"], desc: "Pathway of Vigor engage speed with continuous slow" },
+    { pair: ["Faramis", "Gloo"], desc: "Cult Altar resurrection buff on Split split units" }
+];
 
 function getCurrentTurn() {
     if (!draftState || draftState.currentTurnIndex >= DRAFT_SEQUENCE.length) return null;
@@ -503,7 +533,7 @@ function getHeroCounters(heroName) {
 }
 
 /**
- * Enhanced Recommendation Engine with Multi-Counter Intelligence (v2)
+ * Enhanced Recommendation Engine with Multi-Counter Intelligence
  */
 function getRecommendations() {
     const turn = getCurrentTurn();
@@ -511,7 +541,7 @@ function getRecommendations() {
         return { type: 'complete', list: [], neededLanes: [] };
     }
 
-    const availableHeroes = HERO_DATASET.filter(h => !isHeroUnavailable(h.id));
+    const availableHeroes = (typeof HERO_DATASET !== 'undefined' ? HERO_DATASET : []).filter(h => !isHeroUnavailable(h.id));
     const activeTeam = turn.team;
     const opponentTeam = activeTeam === 'A' ? 'B' : 'A';
 
@@ -583,7 +613,7 @@ function getRecommendations() {
         const safeCandidates = pickCandidates.filter(hero => {
             const counters = getHeroCounters(hero.name);
             const liveCounterCount = counters.filter(cName => {
-                const found = HERO_DATASET.find(h => h.name.toLowerCase() === cName.toLowerCase());
+                const found = (typeof HERO_DATASET !== 'undefined' ? HERO_DATASET : []).find(h => h.name.toLowerCase() === cName.toLowerCase());
                 return found && !isHeroUnavailable(found.id);
             }).length;
 
@@ -677,74 +707,132 @@ function evaluateTeamDraft(picks) {
     };
 }
 
+/**
+ * 10-Category Heuristic Post-Draft Comparison Engine
+ * Output structure includes 8 baseline metrics + Counter Advantage + Team Synergies
+ */
 function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
-    const safeA = (picksA || []).filter(Boolean);
-    const safeB = (picksB || []).filter(Boolean);
-    const safeBansA = (bansA || []).filter(Boolean);
-    const safeBansB = (bansB || []).filter(Boolean);
+    const safeA = (picksA || []).filter(h => h && h.id && !h.isSkipped);
+    const safeB = (picksB || []).filter(h => h && h.id && !h.isSkipped);
+    const safeBansA = (bansA || []).filter(h => h && h.id && !h.isSkipped);
+    const safeBansB = (bansB || []).filter(h => h && h.id && !h.isSkipped);
 
-    function getDamageProfile(picks) {
-        let magic = 0, physical = 0;
-        picks.forEach(hero => {
-            const classes = (typeof getHeroClasses === 'function') ? getHeroClasses(hero) : (hero.heroClass || []);
-            if (classes.includes('Mage')) magic += 1.5;
-            if (classes.includes('Support')) magic += 0.5;
-            if (classes.includes('Marksman') || classes.includes('Assassin')) physical += 1.5;
-            if (classes.includes('Fighter')) physical += 1.0;
-        });
-        const isBalanced = magic >= 1.5 && physical >= 2.0;
-        return { magic, physical, isBalanced };
-    }
+    const getHeroClassesSafe = (h) => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
+    const getHeroLanesSafe = (h) => (typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || []);
 
-    function getPowerCurve(picks) {
-        let early = 0, mid = 0, late = 0;
-        picks.forEach(h => {
-            if (h.powerSpike === 'Early') early++;
-            else if (h.powerSpike === 'Late') late++;
-            else mid++;
-        });
-        return { early, mid, late };
-    }
-
+    // 1. Lane Coverage (EXP, Jungle, Mid, Gold, Roam)
     const openLanesA = getTeamOpenLanes(safeA);
     const openLanesB = getTeamOpenLanes(safeB);
-    const laneCountA = 5 - openLanesA.length;
-    const laneCountB = 5 - openLanesB.length;
+    const laneCoveredA = 5 - openLanesA.length;
+    const laneCoveredB = 5 - openLanesB.length;
 
-    const avgWinRateA = safeA.length ? safeA.reduce((sum, h) => sum + (h.winRate || 50), 0) / safeA.length : 50;
-    const avgWinRateB = safeB.length ? safeB.reduce((sum, h) => sum + (h.winRate || 50), 0) / safeB.length : 50;
+    // 2. Meta Strength (Average Win Rate)
+    const avgWrA = safeA.length ? safeA.reduce((sum, h) => sum + (h.winRate || 50), 0) / safeA.length : 50.0;
+    const avgWrB = safeB.length ? safeB.reduce((sum, h) => sum + (h.winRate || 50), 0) / safeB.length : 50.0;
 
-    const classesA = new Set(safeA.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
-    const classesB = new Set(safeB.flatMap(h => (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || [])));
-    const classCountA = classesA.size;
-    const classCountB = classesB.size;
+    // 3. Role Balance (Unique Combat Classes)
+    const classesA = new Set(safeA.flatMap(getHeroClassesSafe));
+    const classesB = new Set(safeB.flatMap(getHeroClassesSafe));
 
-    const dmgA = getDamageProfile(safeA);
-    const dmgB = getDamageProfile(safeB);
+    // 4. Damage Type (Hybrid Physical / Magic Profile)
+    function calcDamageProfile(picks) {
+        let magic = 0, physical = 0;
+        picks.forEach(h => {
+            const c = getHeroClassesSafe(h);
+            if (c.includes('Mage')) magic += 1.5;
+            if (c.includes('Support')) magic += 0.5;
+            if (c.includes('Marksman') || c.includes('Assassin')) physical += 1.5;
+            if (c.includes('Fighter')) physical += 1.0;
+        });
+        const isBalanced = magic >= 1.0 && physical >= 1.5;
+        return { isBalanced, label: isBalanced ? 'Balanced Split' : 'Heavy Biased' };
+    }
+    const dmgA = calcDamageProfile(safeA);
+    const dmgB = calcDamageProfile(safeB);
 
-    const engageCountA = safeA.filter(h => {
-        const c = (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
-        return c.includes('Tank') || c.includes('Support');
-    }).length;
-    const engageCountB = safeB.filter(h => {
-        const c = (typeof getHeroClasses === 'function') ? getHeroClasses(h) : (h.heroClass || []);
-        return c.includes('Tank') || c.includes('Support');
-    }).length;
+    // 5. Engage / Utility (Tanks & Supports with Crowd Control / Frontline)
+    const engageA = safeA.filter(h => getHeroClassesSafe(h).some(c => ['Tank', 'Support'].includes(c))).length;
+    const engageB = safeB.filter(h => getHeroClassesSafe(h).some(c => ['Tank', 'Support'].includes(c))).length;
 
-    // Track multi-role heroes using the current iteration value to avoid runtime errors in the category comparison.
-    const flexCountA = safeA.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
-    const flexCountB = safeB.filter(h => ((typeof getHeroLanes === 'function') ? getHeroLanes(h) : (h.lanes || [])).length > 1).length;
+    // 6. Flexibility (Heroes capable of flexing across 2+ lanes)
+    const flexA = safeA.filter(h => getHeroLanesSafe(h).length > 1).length;
+    const flexB = safeB.filter(h => getHeroLanesSafe(h).length > 1).length;
 
-    const curveA = getPowerCurve(safeA);
-    const curveB = getPowerCurve(safeB);
-    const curveScoreA = (curveA.early >= 1 ? 1 : 0) + (curveA.mid >= 1 ? 1 : 0) + (curveA.late >= 1 ? 1 : 0);
-    const curveScoreB = (curveB.early >= 1 ? 1 : 0) + (curveB.mid >= 1 ? 1 : 0) + (curveB.late >= 1 ? 1 : 0);
+    // 7. Power Curve (Early / Mid / Late Spikes)
+    function calcPowerCurve(picks) {
+        let early = 0, mid = 0, late = 0;
+        picks.forEach(h => {
+            const spike = h.powerSpike || 'Mid';
+            if (spike === 'Early') early++;
+            else if (spike === 'Late') late++;
+            else mid++;
+        });
+        return { early, mid, late, score: (early >= 1 ? 1 : 0) + (mid >= 1 ? 1 : 0) + (late >= 1 ? 1 : 0) };
+    }
+    const curveA = calcPowerCurve(safeA);
+    const curveB = calcPowerCurve(safeB);
 
+    // 8. Ban Efficiency (Total Meta Threat Banned)
     const banEffA = safeBansA.reduce((sum, h) => sum + (h.banRate || 0), 0);
     const banEffB = safeBansB.reduce((sum, h) => sum + (h.banRate || 0), 0);
 
-    let scoreA = Math.round((laneCountA * 6) + (avgWinRateA * 0.7) + (classCountA * 3) + (dmgA.isBalanced ? 10 : 4) + (engageCountA >= 1 ? 8 : 2) + (flexCountA * 2) + (curveScoreA * 3));
-    let scoreB = Math.round((laneCountB * 6) + (avgWinRateB * 0.7) + (classCountB * 3) + (dmgB.isBalanced ? 10 : 4) + (engageCountB >= 1 ? 8 : 2) + (flexCountB * 2) + (curveScoreB * 3));
+    // 9. Counter Enemy Hero Percentage
+    function calcCounterAdvantage(myTeam, enemyTeam) {
+        if (!enemyTeam || enemyTeam.length === 0) return { pct: 0, count: 0, total: 0 };
+        const myHeroNames = new Set(myTeam.map(h => h.name));
+        let counteredEnemyCount = 0;
+
+        enemyTeam.forEach(enemy => {
+            const counterObj = (COUNTER_DATA[enemy.name] && COUNTER_DATA[enemy.name].counteredBy) || [];
+            const isCountered = counterObj.some(counterHero => myHeroNames.has(counterHero));
+            if (isCountered) counteredEnemyCount++;
+        });
+
+        const totalEnemies = enemyTeam.length;
+        const pct = totalEnemies > 0 ? Math.round((counteredEnemyCount / totalEnemies) * 100) : 0;
+        return { pct, count: counteredEnemyCount, total: totalEnemies };
+    }
+    const counterAdvA = calcCounterAdvantage(safeA, safeB);
+    const counterAdvB = calcCounterAdvantage(safeB, safeA);
+
+    // 10. Team Hero Combo (Synergy Count)
+    function calcTeamCombos(myTeam) {
+        const myHeroNames = new Set(myTeam.map(h => h.name));
+        let comboCount = 0;
+
+        TEAM_SYNERGIES.forEach(combo => {
+            if (myHeroNames.has(combo.pair[0]) && myHeroNames.has(combo.pair[1])) {
+                comboCount++;
+            }
+        });
+        return comboCount;
+    }
+    const combosA = calcTeamCombos(safeA);
+    const combosB = calcTeamCombos(safeB);
+
+    // Normalized 100-Point Draft Quality Scores
+    let scoreA = Math.round(
+        (laneCoveredA * 5) + 
+        (avgWrA * 0.6) + 
+        (classesA.size * 2.5) + 
+        (dmgA.isBalanced ? 8 : 2) + 
+        (engageA >= 1 ? 6 : 1) + 
+        (flexA * 1.5) + 
+        (curveA.score * 2) + 
+        (counterAdvA.pct * 0.15) + 
+        (combosA * 3)
+    );
+    let scoreB = Math.round(
+        (laneCoveredB * 5) + 
+        (avgWrB * 0.6) + 
+        (classesB.size * 2.5) + 
+        (dmgB.isBalanced ? 8 : 2) + 
+        (engageB >= 1 ? 6 : 1) + 
+        (flexB * 1.5) + 
+        (curveB.score * 2) + 
+        (counterAdvB.pct * 0.15) + 
+        (combosB * 3)
+    );
     scoreA = Math.min(100, Math.max(30, scoreA));
     scoreB = Math.min(100, Math.max(30, scoreB));
 
@@ -752,51 +840,51 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
         {
             name: "Lane Coverage",
             desc: "Map position coverage across EXP, Jungle, Mid, Gold, and Roam",
-            statA: `${laneCountA}/5 Covered`,
-            statB: `${laneCountB}/5 Covered`,
-            winner: laneCountA > laneCountB ? 'A' : (laneCountB > laneCountA ? 'B' : 'EQUAL')
+            statA: `${laneCoveredA}/5 Covered`,
+            statB: `${laneCoveredB}/5 Covered`,
+            winner: laneCoveredA > laneCoveredB ? 'A' : (laneCoveredB > laneCoveredA ? 'B' : 'EQUAL')
         },
         {
             name: "Meta Strength",
             desc: "Average baseline win rate across locked heroes",
-            statA: `${avgWinRateA.toFixed(1)}% WR`,
-            statB: `${avgWinRateB.toFixed(1)}% WR`,
-            winner: avgWinRateA > avgWinRateB + 0.2 ? 'A' : (avgWinRateB > avgWinRateA + 0.2 ? 'B' : 'EQUAL')
+            statA: `${avgWrA.toFixed(1)}% WR`,
+            statB: `${avgWrB.toFixed(1)}% WR`,
+            winner: avgWrA > avgWrB + 0.3 ? 'A' : (avgWrB > avgWrA + 0.3 ? 'B' : 'EQUAL')
         },
         {
             name: "Role Balance",
             desc: "Distribution across standard MLBB combat classes",
-            statA: `${classCountA} Classes`,
-            statB: `${classCountB} Classes`,
-            winner: classCountA > classCountB ? 'A' : (classCountB > classCountA ? 'B' : 'EQUAL')
+            statA: `${classesA.size} Classes`,
+            statB: `${classesB.size} Classes`,
+            winner: classesA.size > classesB.size ? 'A' : (classesB.size > classesA.size ? 'B' : 'EQUAL')
         },
         {
             name: "Damage Type",
             desc: "Hybrid split of physical burst and continuous magic power",
-            statA: dmgA.isBalanced ? "Balanced Split" : "Heavy Biased",
-            statB: dmgB.isBalanced ? "Balanced Split" : "Heavy Biased",
+            statA: dmgA.label,
+            statB: dmgB.label,
             winner: dmgA.isBalanced && !dmgB.isBalanced ? 'A' : (dmgB.isBalanced && !dmgA.isBalanced ? 'B' : 'EQUAL')
         },
         {
             name: "Engage / Utility",
             desc: "Crowd control frontline and supportive sustain capacity",
-            statA: `${engageCountA} Utility/Tank`,
-            statB: `${engageCountB} Utility/Tank`,
-            winner: engageCountA > engageCountB ? 'A' : (engageCountB > engageCountA ? 'B' : 'EQUAL')
+            statA: `${engageA} Utility/Tank`,
+            statB: `${engageB} Utility/Tank`,
+            winner: engageA > engageB ? 'A' : (engageB > engageA ? 'B' : 'EQUAL')
         },
         {
             name: "Flexibility",
             desc: "Lineup flex capacity to adapt lanes and counter-play",
-            statA: `${flexCountA} Flex Heroes`,
-            statB: `${flexCountB} Flex Heroes`,
-            winner: flexCountA > flexCountB ? 'A' : (flexCountB > flexCountA ? 'B' : 'EQUAL')
+            statA: `${flexA} Flex Heroes`,
+            statB: `${flexB} Flex Heroes`,
+            winner: flexA > flexB ? 'A' : (flexB > flexA ? 'B' : 'EQUAL')
         },
         {
             name: "Power Curve",
             desc: "Game pacing from early objective pressure to late scaling",
             statA: `${curveA.early}E / ${curveA.mid}M / ${curveA.late}L`,
             statB: `${curveB.early}E / ${curveB.mid}M / ${curveB.late}L`,
-            winner: curveScoreA > curveScoreB ? 'A' : (curveScoreB > curveScoreA ? 'B' : 'EQUAL')
+            winner: curveA.score > curveB.score ? 'A' : (curveB.score > curveA.score ? 'B' : 'EQUAL')
         },
         {
             name: "Ban Efficiency",
@@ -804,6 +892,20 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
             statA: `${banEffA.toFixed(0)}% Threat Ban`,
             statB: `${banEffB.toFixed(0)}% Threat Ban`,
             winner: banEffA > banEffB + 2 ? 'A' : (banEffB > banEffA + 2 ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Counter Advantage",
+            desc: "Percentage of opposing team heroes directly countered by your picks",
+            statA: `${counterAdvA.pct}% (${counterAdvA.count}/${counterAdvA.total} Countered)`,
+            statB: `${counterAdvB.pct}% (${counterAdvB.count}/${counterAdvB.total} Countered)`,
+            winner: counterAdvA.pct > counterAdvB.pct ? 'A' : (counterAdvB.pct > counterAdvA.pct ? 'B' : 'EQUAL')
+        },
+        {
+            name: "Team Synergies",
+            desc: "Cooperative skill combos and paired hero interactions in lineup",
+            statA: `${combosA} Active Combo${combosA === 1 ? '' : 's'}`,
+            statB: `${combosB} Active Combo${combosB === 1 ? '' : 's'}`,
+            winner: combosA > combosB ? 'A' : (combosB > combosA ? 'B' : 'EQUAL')
         }
     ];
 
@@ -811,13 +913,14 @@ function evaluateDraftComparison(picksA, bansA, picksB, bansB) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { 
-        evaluateDraftComparison, 
-        evaluateTeamDraft, 
-        DRAFT_SEQUENCE, 
-        getRecommendations, 
-        getTeamOpenLanes, 
+    module.exports = {
+        evaluateDraftComparison,
+        evaluateTeamDraft,
+        DRAFT_SEQUENCE,
+        getRecommendations,
+        getTeamOpenLanes,
         COUNTER_DATA,
-        getHeroCounters 
+        TEAM_SYNERGIES,
+        getHeroCounters
     };
 }
