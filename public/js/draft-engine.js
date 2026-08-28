@@ -37,142 +37,415 @@ let draftState = {
 
 const ALL_LANES = ['EXP', 'Jungle', 'Mid', 'Gold', 'Roam'];
 
-// Counter Relationship Dataset (Sorted Alphabetically A-Z)
+// =========================================================================
+// EXPANDED COMPETITIVE MLBB COUNTER RELATIONSHIP DATASET
+// Logic: Kit denials, mechanical counters, anti-mechanics, suppression & range advantages
+// =========================================================================
 const COUNTER_DATA = {
-  "Aamon": { "counteredBy": ["Cici", "Claude", "Hilda", "Marcel", "Zilong"] },
-  "Akai": { "counteredBy": ["Alucard", "Fredrinn", "Nana", "Saber", "Silvanna"] },
-  "Aldous": { "counteredBy": ["Belerick", "Helcurt", "Sun", "Uranus", "X.Borg"] },
-  "Alice": { "counteredBy": ["Atlas", "Chip", "Gloo", "Tigreal", "Zhask"] },
-  "Alpha": { "counteredBy": ["Barats", "Baxia", "Hilda", "Johnson", "Phoveus"] },
-  "Alucard": { "counteredBy": ["Cyclops", "Helcurt", "Mathilda", "Natalia", "Sun"] },
-  "Angela": { "counteredBy": ["Alice", "Balmond", "Faramis", "Lancelot", "Marcel"] },
-  "Argus": { "counteredBy": ["Dyrroth", "Helcurt", "Karrie", "Masha", "Saber"] },
-  "Arlott": { "counteredBy": ["Cici", "Khufra", "Natan", "X.Borg", "Zhuxin"] },
-  "Atlas": { "counteredBy": ["Aamon", "Eudora", "Layla", "Lolita", "Popol and Kupa"] },
-  "Aulus": { "counteredBy": ["Gloo", "Minsitthar", "Natalia", "Saber", "Sun"] },
-  "Aurora": { "counteredBy": ["Chip", "Estes", "Eudora", "Lolita", "Odette"] },
-  "Badang": { "counteredBy": ["Aldous", "Fanny", "Hayabusa", "Sun", "Zilong"] },
-  "Balmond": { "counteredBy": ["Barats", "Johnson", "Lukas", "Phoveus", "Saber"] },
-  "Bane": { "counteredBy": ["Baxia", "Faramis", "Khufra", "Odette", "Phoveus"] },
-  "Barats": { "counteredBy": ["Alucard", "Argus", "Brody", "Phoveus", "Silvanna"] },
-  "Baxia": { "counteredBy": ["Alice", "Claude", "Floryn", "Lukas", "Obsidia"] },
-  "Beatrix": { "counteredBy": ["Baxia", "Diggie", "Edith", "Estes", "Hanabi"] },
-  "Belerick": { "counteredBy": ["Kimmy", "Obsidia", "Saber", "Silvanna", "Zhask"] },
-  "Benedetta": { "counteredBy": ["Alpha", "Atlas", "Natan", "Silvanna", "X.Borg"] },
-  "Brody": { "counteredBy": ["Fanny", "Irithel", "Joy", "Karina", "Natalia"] },
-  "Bruno": { "counteredBy": ["Benedetta", "Fanny", "Harith", "Marcel", "Wanwan"] },
-  "Carmilla": { "counteredBy": ["Chip", "Estes", "Gloo", "Minotaur", "Popol and Kupa"] },
-  "Cecilion": { "counteredBy": ["Barats", "Baxia", "Hanabi", "Lolita", "Phoveus"] },
-  "Chang'e": { "counteredBy": ["Diggie", "Lancelot", "Lukas", "Masha", "X.Borg"] },
-  "Chip": { "counteredBy": ["Hanzo", "Helcurt", "Lolita", "Paquito", "Valentina"] },
-  "Chou": { "counteredBy": ["Beatrix", "Benedetta", "Fanny", "X.Borg", "Yve"] },
-  "Cici": { "counteredBy": ["Alice", "Balmond", "Fredrinn", "Hylos", "Thamuz"] },
-  "Claude": { "counteredBy": ["Chang'e", "Granger", "Ixia", "Lolita", "Yu Zhong"] },
-  "Clint": { "counteredBy": ["Belerick", "Karina", "Lolita", "Lunox", "Melissa"] },
-  "Cyclops": { "counteredBy": ["Aldous", "Ling", "Marcel", "Natalia", "Wanwan"] },
-  "Diggie": { "counteredBy": ["Alpha", "Balmond", "Hylos", "Saber", "Zilong"] },
-  "Dyrroth": { "counteredBy": ["Aldous", "Alice", "Esmeralda", "Natalia", "Uranus"] },
-  "Edith": { "counteredBy": ["Alice", "Claude", "Freya", "Harith", "Silvanna"] },
-  "Esmeralda": { "counteredBy": ["Diggie", "Lolita", "Marcel", "Mathilda", "Paquito"] },
-  "Estes": { "counteredBy": ["Alice", "Cici", "Cyclops", "Faramis", "Masha"] },
-  "Eudora": { "counteredBy": ["Floryn", "Irithel", "Marcel", "Rafaela", "Zilong"] },
-  "Fanny": { "counteredBy": ["Clint", "Gloo", "Granger", "Kimmy", "Yve"] },
-  "Faramis": { "counteredBy": ["Chip", "Gloo", "Obsidia", "Sun", "Wanwan"] },
-  "Floryn": { "counteredBy": ["Alice", "Faramis", "Ling", "Marcel", "X.Borg"] },
-  "Franco": { "counteredBy": ["Angela", "Benedetta", "Fanny", "Floryn", "Freya"] },
-  "Fredrinn": { "counteredBy": ["Alucard", "Argus", "Esmeralda", "Gloo", "Odette"] },
-  "Freya": { "counteredBy": ["Aulus", "Hanzo", "Lolita", "Sun", "Yve"] },
-  "Gatotkaca": { "counteredBy": ["Atlas", "Chip", "Hanabi", "Miya", "Odette"] },
-  "Gloo": { "counteredBy": ["Aamon", "Jawhead", "Johnson", "Karina", "Lesley"] },
-  "Gord": { "counteredBy": ["Barats", "Fredrinn", "Lolita", "Phoveus", "Terizla"] },
-  "Granger": { "counteredBy": ["Baxia", "Beatrix", "Diggie", "Karina", "Melissa"] },
-  "Grock": { "counteredBy": ["Baxia", "Lolita", "Odette", "Popol and Kupa", "Yin"] },
-  "Guinevere": { "counteredBy": ["Cici", "Esmeralda", "Julian", "Lunox", "Thamuz"] },
-  "Gusion": { "counteredBy": ["Aamon", "Gord", "Natalia", "Suyou", "Valir"] },
-  "Hanabi": { "counteredBy": ["Chip", "Kaja", "Moskov", "Popol and Kupa", "Saber"] },
-  "Hanzo": { "counteredBy": ["Diggie", "Franco", "Khufra", "Layla", "Saber"] },
-  "Harith": { "counteredBy": ["Irithel", "Johnson", "Lolita", "Suyou", "Zetian"] },
-  "Harley": { "counteredBy": ["Alice", "Joy", "Melissa", "Suyou", "Valir"] },
-  "Hayabusa": { "counteredBy": ["Aamon", "Karina", "Nolan", "Yve", "Zhuxin"] },
-  "Helcurt": { "counteredBy": ["Gord", "Kimmy", "Valir", "X.Borg", "Xavier"] },
-  "Hilda": { "counteredBy": ["Granger", "Harley", "Helcurt", "Nolan", "Novaria"] },
-  "Hirara": { "counteredBy": ["Baxia", "Hanzo", "Joy", "X.Borg", "Yin"] },
-  "Hylos": { "counteredBy": ["Johnson", "Khufra", "Layla", "Lukas", "Saber"] },
-  "Irithel": { "counteredBy": ["Beatrix", "Benedetta", "Minsitthar", "Wanwan", "Yin"] },
-  "Ixia": { "counteredBy": ["Cyclops", "Estes", "Floryn", "Lolita", "Rafaela"] },
-  "Jawhead": { "counteredBy": ["Arlott", "Dyrroth", "Helcurt", "Nolan", "Zilong"] },
-  "Johnson": { "counteredBy": ["Floryn", "Franco", "Layla", "Valentina", "Zilong"] },
-  "Joy": { "counteredBy": ["Hanabi", "Lolita", "Sun", "Uranus", "X.Borg"] },
-  "Julian": { "counteredBy": ["Alice", "Diggie", "Esmeralda", "Faramis", "Phoveus"] },
-  "Kadita": { "counteredBy": ["Ixia", "Johnson", "Lolita", "Odette", "Silvanna"] },
-  "Kagura": { "counteredBy": ["Lolita", "Silvanna", "Sun", "Vale", "X.Borg"] },
-  "Kaja": { "counteredBy": ["Baxia", "Beatrix", "Kagura", "Valir", "Wanwan"] },
-  "Kalea": { "counteredBy": ["Aldous", "Alucard", "Fanny", "Helcurt", "Zilong"] },
-  "Karina": { "counteredBy": ["Helcurt", "Kimmy", "Lolita", "Marcel", "Natalia"] },
-  "Karrie": { "counteredBy": ["Alice", "Aulus", "Balmond", "Leomord", "Terizla"] },
-  "Khaleed": { "counteredBy": ["Harley", "Nolan", "Vale", "Yin", "Zilong"] },
-  "Khufra": { "counteredBy": ["Alucard", "Beatrix", "Silvanna", "Wanwan", "Yin"] },
-  "Kimmy": { "counteredBy": ["Alpha", "Balmond", "Hanzo", "Hylos", "Sun"] },
-  "Lancelot": { "counteredBy": ["Alpha", "Atlas", "Baxia", "X.Borg", "Yin"] },
-  "Lapu-Lapu": { "counteredBy": ["Argus", "Masha", "Phoveus", "Popol and Kupa", "Silvanna"] },
-  "Layla": { "counteredBy": ["Edith", "Faramis", "Melissa", "Phoveus", "Rafaela"] },
-  "Leomord": { "counteredBy": ["Belerick", "Lolita", "Natalia", "Popol and Kupa", "Saber"] },
-  "Lesley": { "counteredBy": ["Belerick", "Bruno", "Claude", "Gatotkaca", "Marcel"] },
-  "Ling": { "counteredBy": ["Atlas", "Gloo", "Hanzo", "Valir", "X.Borg"] },
-  "Lolita": { "counteredBy": ["Chang'e", "Cyclops", "Edith", "Floryn", "Harley"] },
-  "Lukas": { "counteredBy": ["Arlott", "Fanny", "Ling", "Natalia", "Zilong"] },
-  "Lunox": { "counteredBy": ["Esmeralda", "Gloo", "Karina", "Natalia", "Wanwan"] },
-  "Luo Yi": { "counteredBy": ["Baxia", "Estes", "Faramis", "Popol and Kupa", "Uranus"] },
-  "Lylia": { "counteredBy": ["Alpha", "Baxia", "Diggie", "Hanabi", "Johnson"] },
-  "Marcel": { "counteredBy": ["Atlas", "Chip", "Kadita", "Khufra", "Martis"] },
-  "Martis": { "counteredBy": ["Alucard", "Chip", "Dyrroth", "Johnson", "Saber"] },
-  "Masha": { "counteredBy": ["Dyrroth", "Fanny", "Guinevere", "Wanwan", "Yu Zhong"] },
-  "Mathilda": { "counteredBy": ["Benedetta", "Granger", "Natalia", "Valir", "X.Borg"] },
-  "Melissa": { "counteredBy": ["Alucard", "Faramis", "Leomord", "Lolita", "Mathilda"] },
-  "Minotaur": { "counteredBy": ["Cyclops", "Khufra", "Lolita", "Odette", "Silvanna"] },
-  "Minsitthar": { "counteredBy": ["Freya", "Harith", "Lukas", "Martis", "Phoveus"] },
-  "Miya": { "counteredBy": ["Irithel", "Obsidia", "Saber", "Selena", "Silvanna"] },
-  "Moskov": { "counteredBy": ["Beatrix", "Fanny", "Gloo", "Joy", "Wanwan"] },
-  "Nana": { "counteredBy": ["Alucard", "Edith", "Estes", "Lolita", "Odette"] },
-  "Natalia": { "counteredBy": ["Ling", "Lolita", "Minsitthar", "Nolan", "Xavier"] },
-  "Natan": { "counteredBy": ["Esmeralda", "Gloo", "Sun", "Uranus", "Zhask"] },
-  "Nolan": { "counteredBy": ["Bane", "Estes", "Floryn", "Valir", "X.Borg"] },
-  "Novaria": { "counteredBy": ["Bane", "Diggie", "Kaja", "Marcel", "Valir"] },
-  "Obsidia": { "counteredBy": ["Beatrix", "Benedetta", "Fanny", "Helcurt", "Nolan"] },
-  "Odette": { "counteredBy": ["Hirara", "Kaja", "Marcel", "Mathilda", "Rafaela"] },
-  "Paquito": { "counteredBy": ["Aldous", "Karina", "Natalia", "Wanwan", "X.Borg"] },
-  "Pharsa": { "counteredBy": ["Hanabi", "Lolita", "Melissa", "Valir", "Yve"] },
-  "Phoveus": { "counteredBy": ["Alucard", "Freya", "Harith", "Ruby", "Wanwan"] },
-  "Popol and Kupa": { "counteredBy": ["Diggie", "Harith", "Harley", "Mathilda", "Zilong"] },
-  "Rafaela": { "counteredBy": ["Alice", "Karrie", "Marcel", "Natalia", "Valir"] },
-  "Roger": { "counteredBy": ["Aldous", "Gusion", "Harley", "Masha", "Yin"] },
-  "Ruby": { "counteredBy": ["Gloo", "Joy", "Lunox", "Masha", "Sun"] },
-  "Saber": { "counteredBy": ["Hirara", "Ling", "Lunox", "Natalia", "Nolan"] },
-  "Selena": { "counteredBy": ["Beatrix", "Benedetta", "Ixia", "X.Borg", "Yve"] },
-  "Silvanna": { "counteredBy": ["Aamon", "Aldous", "Angela", "Floryn", "Rafaela"] },
-  "Sora": { "counteredBy": ["Estes", "Karina", "Natan", "Popol and Kupa", "Rafaela"] },
-  "Sun": { "counteredBy": ["Cici", "Diggie", "Jawhead", "Lesley", "Masha"] },
-  "Suyou": { "counteredBy": ["Balmond", "Baxia", "Diggie", "Natalia", "Sun"] },
-  "Terizla": { "counteredBy": ["Argus", "Masha", "Phoveus", "Popol and Kupa", "Tigreal"] },
-  "Thamuz": { "counteredBy": ["Alice", "Alucard", "Dyrroth", "Lukas", "Masha"] },
-  "Tigreal": { "counteredBy": ["Estes", "Franco", "Lesley", "Lolita", "Zilong"] },
-  "Uranus": { "counteredBy": ["Argus", "Barats", "Masha", "Phoveus", "Yi Sun-shin"] },
-  "Valentina": { "counteredBy": ["Atlas", "Carmilla", "Grock", "Lolita", "X.Borg"] },
-  "Vale": { "counteredBy": ["Estes", "Melissa", "Odette", "Rafaela", "Silvanna"] },
-  "Valir": { "counteredBy": ["Alice", "Balmond", "Fredrinn", "Leomord", "Thamuz"] },
-  "Vexana": { "counteredBy": ["Alucard", "Chip", "Gloo", "Odette", "Zhask"] },
-  "Wanwan": { "counteredBy": ["Alpha", "Atlas", "Ixia", "Thamuz", "Yin"] },
-  "X.Borg": { "counteredBy": ["Barats", "Baxia", "Martis", "Phoveus", "Terizla"] },
-  "Xavier": { "counteredBy": ["Baxia", "Belerick", "Hylos", "Terizla", "Uranus"] },
-  "Yi Sun-shin": { "counteredBy": ["Benedetta", "Diggie", "Khufra", "Melissa", "Wanwan"] },
-  "Yin": { "counteredBy": ["Diggie", "Floryn", "Minsitthar", "Phoveus", "Silvanna"] },
-  "Yu Zhong": { "counteredBy": ["Atlas", "Carmilla", "Gloo", "Minsitthar", "Popol and Kupa"] },
-  "Yve": { "counteredBy": ["Alpha", "Balmond", "Lolita", "Minotaur", "X.Borg"] },
-  "Zetian": { "counteredBy": ["Helcurt", "Lolita", "Natalia", "Popol and Kupa", "Tigreal"] },
-  "Zhask": { "counteredBy": ["Arlott", "Chip", "Diggie", "Kaja", "Lolita"] },
-  "Zhuxin": { "counteredBy": ["Aamon", "Hanzo", "Hylos", "Khufra", "Lolita"] },
-  "Zilong": { "counteredBy": ["Angela", "Benedetta", "Cici", "Novaria", "X.Borg"] }
+  "Aamon": {
+    "counteredBy": ["Ruby", "Saber", "Kaja", "Franco", "Eudora", "Khufra", "Chou", "Lolita", "Gusion", "Belerick"]
+  },
+  "Akai": {
+    "counteredBy": ["Diggie", "Valir", "Karrie", "Claude", "Wanwan", "Lunox", "X.Borg", "Moskov", "Gusion"]
+  },
+  "Aldous": {
+    "counteredBy": ["Akai", "Franco", "Kaja", "Valir", "Lunox", "Mawia", "Chou", "Grock", "Esmeralda", "Jawhead", "Ruby"]
+  },
+  "Alice": {
+    "counteredBy": ["Baxia", "Karrie", "Dyrroth", "Valir", "Lunox", "Claude", "X.Borg", "Franco", "Kaja", "Silvanna"]
+  },
+  "Alpha": {
+    "counteredBy": ["Baxia", "Valir", "Karrie", "Claude", "Kaja", "Franco", "Dyrroth", "Lunox", "Phoveus", "Ruby"]
+  },
+  "Alucard": {
+    "counteredBy": ["Khufra", "Franco", "Kaja", "Baxia", "Saber", "Minsitthar", "Phoveus", "Chou", "Valir", "Eudora"]
+  },
+  "Angela": {
+    "counteredBy": ["Faramis", "Baxia", "Saber", "Natalia", "Chou", "Lancelot", "Hayabusa", "Helcurt", "Kaja", "Franco"]
+  },
+  "Argus": {
+    "counteredBy": ["Franco", "Kaja", "Valir", "Akai", "Ruby", "Chou", "Diggie", "Belerick", "Grock", "Jawhead"]
+  },
+  "Arlott": {
+    "counteredBy": ["Phoveus", "Minsitthar", "Khufra", "Diggie", "Franco", "Kaja", "Ruby", "Valir", "Belerick"]
+  },
+  "Atlas": {
+    "counteredBy": ["Diggie", "Valir", "Akai", "Kadita", "Wanwan", "Claude", "Karrie", "Lunox", "Chou", "Franco"]
+  },
+  "Aulus": {
+    "counteredBy": ["Valir", "Franco", "Kaja", "Karrie", "Claude", "Baxia", "Dyrroth", "Lunox", "Saber", "Phoveus"]
+  },
+  "Aurora": {
+    "counteredBy": ["Helcurt", "Saber", "Lancelot", "Hayabusa", "Chou", "Ling", "Fanny", "Natalia", "Joy", "Benedetta"]
+  },
+  "Badang": {
+    "counteredBy": ["Chou", "Diggie", "Wanwan", "Benedetta", "Ruby", "Khufra", "Franco", "Kaja", "Lancelot", "Hayabusa"]
+  },
+  "Balmond": {
+    "counteredBy": ["Valir", "Baxia", "Karrie", "Dyrroth", "Lunox", "Claude", "X.Borg", "Franco", "Kaja", "Sun"]
+  },
+  "Bane": {
+    "counteredBy": ["Chou", "Saber", "Hayabusa", "Lancelot", "Valir", "Ling", "Fanny", "Natalia", "Kaja", "Franco"]
+  },
+  "Barats": {
+    "counteredBy": ["Karrie", "Lunox", "Valir", "Claude", "Dyrroth", "Baxia", "X.Borg", "Wanwan", "Diggie", "Gord"]
+  },
+  "Baxia": {
+    "counteredBy": ["Karrie", "Lunox", "Valir", "X.Borg", "Claude", "Dyrroth", "Sun", "Gord", "Wanwan"]
+  },
+  "Beatrix": {
+    "counteredBy": ["Saber", "Chou", "Hayabusa", "Lancelot", "Natalia", "Ling", "Fanny", "Helcurt", "Kaja", "Franco", "Joy"]
+  },
+  "Belerick": {
+    "counteredBy": ["Karrie", "Lunox", "Dyrroth", "Valir", "Claude", "X.Borg", "Baxia", "Gord", "Wanwan"]
+  },
+  "Benedetta": {
+    "counteredBy": ["Minsitthar", "Phoveus", "Khufra", "Kaja", "Franco", "Ruby", "Saber", "Eudora", "Chou", "Belerick"]
+  },
+  "Brody": {
+    "counteredBy": ["Hayabusa", "Lancelot", "Saber", "Chou", "Ling", "Fanny", "Natalia", "Joy", "Helcurt", "Kaja"]
+  },
+  "Bruno": {
+    "counteredBy": ["Lolita", "Belerick", "Grock", "Hayabusa", "Chou", "Lancelot", "Saber", "Franco", "Kaja", "Khufra"]
+  },
+  "Carmilla": {
+    "counteredBy": ["Diggie", "Valir", "Karrie", "Wanwan", "Baxia", "Lunox", "Claude", "X.Borg", "Akai", "Franco"]
+  },
+  "Cecilion": {
+    "counteredBy": ["Helcurt", "Hayabusa", "Lancelot", "Ling", "Chou", "Saber", "Fanny", "Natalia", "Joy", "Gusion", "Kaja"]
+  },
+  "Chang'e": {
+    "counteredBy": ["Lolita", "Lancelot", "Hayabusa", "Ling", "Chou", "Saber", "Fanny", "Gusion", "Khufra", "Belerick", "Joy"]
+  },
+  "Chip": {
+    "counteredBy": ["Diggie", "Valir", "Luo Yi", "Vexana", "Faramis", "Akai", "Franco", "Kaja", "Baxia"]
+  },
+  "Chou": {
+    "counteredBy": ["Diggie", "Phoveus", "Kaja", "Franco", "Khufra", "Minsitthar", "Ruby", "Belerick", "Akai", "Grock"]
+  },
+  "Cici": {
+    "counteredBy": ["Baxia", "Dyrroth", "Kaja", "Franco", "Valir", "Karrie", "Lunox", "Chou", "Saber", "Phoveus"]
+  },
+  "Claude": {
+    "counteredBy": ["Belerick", "Saber", "Kaja", "Franco", "Diggie", "Khufra", "Chou", "Eudora", "Aurora", "Grock"]
+  },
+  "Clint": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Ling", "Saber", "Fanny", "Natalia", "Kaja", "Franco"]
+  },
+  "Cyclops": {
+    "counteredBy": ["Lolita", "Lancelot", "Hayabusa", "Chou", "Saber", "Ling", "Helcurt", "Fanny", "Natalia", "Baxia"]
+  },
+  "Diggie": {
+    "counteredBy": ["Guinevere", "Chou", "Saber", "Helcurt", "Natalia", "Lancelot", "Hayabusa", "Ling", "Fanny", "Kaja"]
+  },
+  "Dyrroth": {
+    "counteredBy": ["Valir", "Thamuz", "Freya", "Karrie", "Lunox", "Claude", "Chou", "Franco", "Kaja", "Ruby"]
+  },
+  "Edith": {
+    "counteredBy": ["Karrie", "Lunox", "Dyrroth", "Valir", "Claude", "Baxia", "X.Borg", "Wanwan", "Diggie"]
+  },
+  "Esmeralda": {
+    "counteredBy": ["Baxia", "Dyrroth", "Karrie", "Lunox", "Valir", "Claude", "X.Borg", "Kaja", "Franco", "Thamuz"]
+  },
+  "Estes": {
+    "counteredBy": ["Baxia", "Luo Yi", "Faramis", "Atlas", "Carmilla", "Akai", "Vexana", "Franco", "Kaja", "Saber"]
+  },
+  "Eudora": {
+    "counteredBy": ["Lolita", "Lancelot", "Hayabusa", "Chou", "Ling", "Helcurt", "Fanny", "Natalia", "Benedetta", "Joy"]
+  },
+  "Fanny": {
+    "counteredBy": ["Khufra", "Minsitthar", "Eudora", "Saber", "Franco", "Kaja", "Moskov", "Ruby", "Akai", "Chou", "Phoveus"]
+  },
+  "Faramis": {
+    "counteredBy": ["Valentina", "Baxia", "Luo Yi", "Akai", "Diggie", "Kaja", "Franco", "Atlas", "Carmilla"]
+  },
+  "Floryn": {
+    "counteredBy": ["Baxia", "Saber", "Hayabusa", "Helcurt", "Natalia", "Lancelot", "Ling", "Fanny", "Chou", "Kaja"]
+  },
+  "Franco": {
+    "counteredBy": ["Diggie", "Sun", "Popol and Kupa", "Zhask", "Grock", "Akai", "Belerick", "Khufra", "Hylos", "Atlas"]
+  },
+  "Fredrinn": {
+    "counteredBy": ["Karrie", "Lunox", "Valir", "Baxia", "Dyrroth", "Claude", "X.Borg", "Wanwan", "Diggie"]
+  },
+  "Freya": {
+    "counteredBy": ["Valir", "Baxia", "Khufra", "Karrie", "Dyrroth", "Franco", "Kaja", "Akai", "Lunox", "Ruby"]
+  },
+  "Gatotkaca": {
+    "counteredBy": ["Karrie", "Lunox", "Dyrroth", "Valir", "Diggie", "Claude", "X.Borg", "Wanwan", "Baxia"]
+  },
+  "Gloo": {
+    "counteredBy": ["Faramis", "Vexana", "Claude", "Valir", "Baxia", "Sun", "Ruby", "Diggie", "Alpha", "Grock"]
+  },
+  "Gord": {
+    "counteredBy": ["Chou", "Lancelot", "Hayabusa", "Ling", "Saber", "Fanny", "Natalia", "Helcurt", "Joy", "Kaja", "Franco"]
+  },
+  "Granger": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Ling", "Saber", "Fanny", "Belerick", "Natalia", "Kaja"]
+  },
+  "Grock": {
+    "counteredBy": ["Karrie", "Lunox", "Valir", "X.Borg", "Diggie", "Claude", "Dyrroth", "Baxia", "Wanwan"]
+  },
+  "Guinevere": {
+    "counteredBy": ["Diggie", "Helcurt", "Chou", "Wanwan", "Ruby", "Kaja", "Franco", "Benedetta", "Akai", "Khufra"]
+  },
+  "Gusion": {
+    "counteredBy": ["Lolita", "Minsitthar", "Khufra", "Ruby", "Saber", "Kaja", "Franco", "Eudora", "Chou", "Phoveus"]
+  },
+  "Hanabi": {
+    "counteredBy": ["Lolita", "Belerick", "Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Khufra"]
+  },
+  "Hanzo": {
+    "counteredBy": ["Ling", "Natalia", "Hayabusa", "Lancelot", "Fanny", "Saber", "Chou", "Joy", "Helcurt", "Benedetta"]
+  },
+  "Harith": {
+    "counteredBy": ["Minsitthar", "Phoveus", "Khufra", "Kaja", "Franco", "Saber", "Eudora", "Ruby", "Belerick", "Valir"]
+  },
+  "Harley": {
+    "counteredBy": ["Lolita", "Hayabusa", "Saber", "Chou", "Ling", "Lancelot", "Kaja", "Franco", "Eudora", "Ruby"]
+  },
+  "Hayabusa": {
+    "counteredBy": ["Saber", "Kaja", "Franco", "Khufra", "Ruby", "Chou", "Phoveus", "Minsitthar", "Eudora", "Jawhead"]
+  },
+  "Helcurt": {
+    "counteredBy": ["Kaja", "Franco", "Ruby", "Hylos", "Belerick", "Chou", "Akai", "Khufra", "Saber", "Jawhead"]
+  },
+  "Hilda": {
+    "counteredBy": ["Karrie", "Valir", "Dyrroth", "Baxia", "Lunox", "Claude", "X.Borg", "Franco", "Kaja", "Ruby"]
+  },
+  "Hirara": {
+    "counteredBy": ["Baxia", "Franco", "Kaja", "Saber", "Valir", "Karrie", "Lunox", "Dyrroth", "Chou"]
+  },
+  "Hylos": {
+    "counteredBy": ["Karrie", "Lunox", "Valir", "Dyrroth", "Baxia", "Claude", "X.Borg", "Wanwan", "Diggie"]
+  },
+  "Irithel": {
+    "counteredBy": ["Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Kaja", "Franco", "Lolita"]
+  },
+  "Ixia": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Ling", "Saber", "Fanny", "Natalia", "Kaja", "Franco", "Khufra"]
+  },
+  "Jawhead": {
+    "counteredBy": ["Valir", "Karrie", "Diggie", "Ruby", "Franco", "Kaja", "Chou", "Akai", "Khufra", "Dyrroth"]
+  },
+  "Johnson": {
+    "counteredBy": ["Diggie", "Belerick", "Grock", "Akai", "Claude", "Karrie", "Baxia", "Atlas", "Franco"]
+  },
+  "Joy": {
+    "counteredBy": ["Minsitthar", "Phoveus", "Khufra", "Franco", "Kaja", "Saber", "Ruby", "Eudora", "Chou", "Belerick"]
+  },
+  "Julian": {
+    "counteredBy": ["Valir", "Saber", "Kaja", "Franco", "Chou", "Ruby", "Khufra", "Eudora", "Dyrroth", "Phoveus"]
+  },
+  "Kadita": {
+    "counteredBy": ["Lolita", "Diggie", "Chou", "Lancelot", "Ruby", "Kaja", "Franco", "Wanwan", "Akai", "Khufra"]
+  },
+  "Kagura": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Helcurt", "Fanny", "Franco", "Kaja", "Joy"]
+  },
+  "Kaja": {
+    "counteredBy": ["Diggie", "Valir", "Grock", "Akai", "Zhask", "Popol and Kupa", "Sun", "Belerick", "Khufra"]
+  },
+  "Kalea": {
+    "counteredBy": ["Baxia", "Karrie", "Valir", "Saber", "Dyrroth", "Lunox", "Claude", "Franco", "Kaja"]
+  },
+  "Karina": {
+    "counteredBy": ["Lunox", "Eudora", "Kaja", "Franco", "Ruby", "Saber", "Chou", "Khufra", "Valir", "Baxia"]
+  },
+  "Karrie": {
+    "counteredBy": ["Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Kaja", "Franco", "Helcurt"]
+  },
+  "Khaleed": {
+    "counteredBy": ["Valir", "Baxia", "Chou", "Dyrroth", "Ruby", "Franco", "Kaja", "Karrie", "Lunox", "Akai"]
+  },
+  "Khufra": {
+    "counteredBy": ["Diggie", "Valir", "Karrie", "Claude", "Wanwan", "Lunox", "Franco", "Kaja", "X.Borg", "Akai"]
+  },
+  "Kimmy": {
+    "counteredBy": ["Lolita", "Belerick", "Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Khufra"]
+  },
+  "Lancelot": {
+    "counteredBy": ["Khufra", "Minsitthar", "Phoveus", "Kaja", "Franco", "Ruby", "Saber", "Eudora", "Chou", "Belerick"]
+  },
+  "Lapu-Lapu": {
+    "counteredBy": ["Valir", "Dyrroth", "Karrie", "Thamuz", "Lunox", "Claude", "Baxia", "Franco", "Kaja", "Ruby"]
+  },
+  "Layla": {
+    "counteredBy": ["Hayabusa", "Lancelot", "Saber", "Chou", "Ling", "Fanny", "Natalia", "Helcurt", "Joy", "Kaja", "Franco", "Khufra"]
+  },
+  "Leomord": {
+    "counteredBy": ["Valir", "Dyrroth", "Karrie", "Akai", "Baxia", "Franco", "Kaja", "Lunox", "Claude", "Ruby"]
+  },
+  "Lesley": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Ling", "Saber", "Fanny", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Ling": {
+    "counteredBy": ["Khufra", "Minsitthar", "Ruby", "Kaja", "Franco", "Saber", "Eudora", "Chou", "Phoveus", "Akai"]
+  },
+  "Lolita": {
+    "counteredBy": ["Grock", "Chou", "Kaja", "Franco", "Akai", "Diggie", "Jawhead", "Ruby", "Khufra", "Baxia"]
+  },
+  "Lukas": {
+    "counteredBy": ["Karrie", "Valir", "Baxia", "Dyrroth", "Lunox", "Claude", "Franco", "Kaja", "Saber"]
+  },
+  "Lunox": {
+    "counteredBy": ["Chou", "Lancelot", "Hayabusa", "Saber", "Ling", "Fanny", "Helcurt", "Natalia", "Kaja", "Franco", "Joy"]
+  },
+  "Luo Yi": {
+    "counteredBy": ["Lancelot", "Hayabusa", "Chou", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Lylia": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Kaja", "Franco", "Joy"]
+  },
+  "Marcel": {
+    "counteredBy": ["Baxia", "Karrie", "Valir", "Saber", "Kaja", "Franco", "Dyrroth", "Lunox", "Claude","Obsidia"]
+  },
+  "Martis": {
+    "counteredBy": ["Valir", "Karrie", "Dyrroth", "Phoveus", "Franco", "Kaja", "Baxia", "Lunox", "Claude", "Ruby"]
+  },
+  "Masha": {
+    "counteredBy": ["Baxia", "Valir", "Claude", "Wanwan", "Akai", "Dyrroth", "Karrie", "Lunox", "Ruby", "Franco"]
+  },
+  "Mathilda": {
+    "counteredBy": ["Phoveus", "Minsitthar", "Khufra", "Saber", "Kaja", "Franco", "Eudora", "Ruby", "Chou", "Valir"]
+  },
+  "Melissa": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Ling", "Saber", "Fanny", "Natalia", "Kaja", "Franco", "Khufra"]
+  },
+  "Minotaur": {
+    "counteredBy": ["Diggie", "Valir", "Karrie", "Claude", "Wanwan", "Lunox", "Franco", "Kaja", "Akai", "Grock"]
+  },
+  "Minsitthar": {
+    "counteredBy": ["Diggie", "Valir", "Karrie", "Claude", "Lunox", "X.Borg", "Wanwan", "Franco", "Kaja", "Akai"]
+  },
+  "Miya": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Kaja", "Franco", "Khufra"]
+  },
+  "Moskov": {
+    "counteredBy": ["Lolita", "Belerick", "Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Khufra", "Franco"]
+  },
+  "Nana": {
+    "counteredBy": ["Lancelot", "Hayabusa", "Chou", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Natalia": {
+    "counteredBy": ["Hylos", "Rafaela", "Yi Sun-shin", "Aldous", "Popol and Kupa", "Kaja", "Franco", "Belerick", "Ruby", "Saber"]
+  },
+  "Natan": {
+    "counteredBy": ["Lolita", "Hayabusa", "Lancelot", "Chou", "Ling", "Saber", "Fanny", "Natalia", "Kaja", "Franco", "Khufra"]
+  },
+  "Nolan": {
+    "counteredBy": ["Khufra", "Minsitthar", "Phoveus", "Kaja", "Franco", "Ruby", "Saber", "Eudora", "Chou", "Belerick"]
+  },
+  "Novaria": {
+    "counteredBy": ["Ling", "Hayabusa", "Lancelot", "Chou", "Saber", "Fanny", "Natalia", "Joy", "Helcurt", "Kaja"]
+  },
+  "Obsidia": {
+    "counteredBy": ["Karrie", "Lunox", "Valir", "Baxia", "Dyrroth", "Claude", "Franco", "Kaja", "Saber"]
+  },
+  "Odette": {
+    "counteredBy": ["Chou", "Jawhead", "Kaja", "Franco", "Ruby", "Saber", "Eudora", "Khufra", "Akai", "Valir", "Diggie"]
+  },
+  "Paquito": {
+    "counteredBy": ["Phoveus", "Minsitthar", "Khufra", "Kaja", "Franco", "Ruby", "Saber", "Chou", "Valir", "Belerick"]
+  },
+  "Pharsa": {
+    "counteredBy": ["Lancelot", "Hayabusa", "Chou", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Phoveus": {
+    "counteredBy": ["Karrie", "Lunox", "Dyrroth", "Baxia", "Valir", "Claude", "X.Borg", "Franco", "Kaja", "Wanwan"]
+  },
+  "Popol and Kupa": {
+    "counteredBy": ["Luo Yi", "Claude", "Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Khufra"]
+  },
+  "Rafaela": {
+    "counteredBy": ["Saber", "Hayabusa", "Lancelot", "Helcurt", "Chou", "Ling", "Fanny", "Natalia", "Kaja", "Franco"]
+  },
+  "Roger": {
+    "counteredBy": ["Baxia", "Valir", "Karrie", "Dyrroth", "Ruby", "Franco", "Kaja", "Lunox", "Claude", "Khufra"]
+  },
+  "Ruby": {
+    "counteredBy": ["Baxia", "Valir", "Karrie", "Dyrroth", "Phoveus", "Franco", "Kaja", "Lunox", "Claude", "Diggie"]
+  },
+  "Saber": {
+    "counteredBy": ["Diggie", "Grock", "Akai", "Khufra", "Belerick", "Ruby", "Chou", "Franco", "Kaja", "Jawhead"]
+  },
+  "Selena": {
+    "counteredBy": ["Diggie", "Lolita", "Kagura", "Hayabusa", "Chou", "Lancelot", "Ling", "Saber", "Franco", "Kaja"]
+  },
+  "Silvanna": {
+    "counteredBy": ["Diggie", "Chou", "Akai", "Valir", "Ruby", "Franco", "Kaja", "Khufra", "Jawhead", "Wanwan"]
+  },
+  "Sora": {
+    "counteredBy": ["Baxia", "Dyrroth", "Valir", "Karrie", "Lunox", "Claude", "Franco", "Kaja", "Saber"]
+  },
+  "Sun": {
+    "counteredBy": ["Faramis", "Luo Yi", "Baxia", "Odette", "Ruby", "Claude", "Gloo", "Alpha", "Terizla", "Balmond"]
+  },
+  "Suyou": {
+    "counteredBy": ["Khufra", "Minsitthar", "Kaja", "Franco", "Valir", "Ruby", "Saber", "Chou", "Phoveus", "Eudora"]
+  },
+  "Terizla": {
+    "counteredBy": ["Valir", "Karrie", "Dyrroth", "Lunox", "Claude", "X.Borg", "Baxia", "Wanwan", "Diggie", "Franco"]
+  },
+  "Thamuz": {
+    "counteredBy": ["Valir", "Baxia", "Karrie", "Dyrroth", "Lunox", "Claude", "X.Borg", "Franco", "Kaja", "Ruby"]
+  },
+  "Tigreal": {
+    "counteredBy": ["Diggie", "Valir", "Akai", "Wanwan", "Claude", "Karrie", "Lunox", "Franco", "Kaja", "Grock"]
+  },
+  "Uranus": {
+    "counteredBy": ["Baxia", "Karrie", "Dyrroth", "Lunox", "Valir", "Claude", "X.Borg", "Sun", "Gord", "Wanwan","Esmeralda"]
+  },
+  "Valentina": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Kaja", "Franco"]
+  },
+  "Vale": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Valir": {
+    "counteredBy": ["Lancelot", "Hayabusa", "Chou", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Benedetta", "Kaja"]
+  },
+  "Vexana": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Wanwan": {
+    "counteredBy": ["Phoveus", "Khufra", "Kaja", "Franco", "Lolita", "Minsitthar", "Belerick", "Saber", "Eudora", "Chou"]
+  },
+  "X.Borg": {
+    "counteredBy": ["Baxia", "Dyrroth", "Karrie", "Lunox", "Valir", "Claude", "Hayabusa", "Chou", "Franco", "Kaja"]
+  },
+  "Xavier": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Yi Sun-shin": {
+    "counteredBy": ["Hayabusa", "Lancelot", "Chou", "Saber", "Ling", "Fanny", "Natalia", "Kaja", "Franco", "Khufra"]
+  },
+  "Yin": {
+    "counteredBy": ["Diggie", "Valir", "Akai", "Wanwan", "Ruby", "Chou", "Franco", "Kaja", "Khufra", "Belerick"]
+  },
+  "Yu Zhong": {
+    "counteredBy": ["Baxia", "Valir", "Karrie", "Dyrroth", "Lunox", "Claude", "X.Borg", "Franco", "Kaja", "Ruby"]
+  },
+  "Yve": {
+    "counteredBy": ["Lancelot", "Hayabusa", "Chou", "Ling", "Kaja", "Franco", "Saber", "Fanny", "Helcurt", "Joy"]
+  },
+  "Zetian": {
+    "counteredBy": ["Chou", "Hayabusa", "Lancelot", "Ling", "Saber", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja"]
+  },
+  "Zhask": {
+    "counteredBy": ["Claude", "Luo Yi", "Faramis", "Hayabusa", "Lancelot", "Ling", "Chou", "Saber", "Baxia", "Sun"]
+  },
+  "Zhuxin": {
+    "counteredBy": ["Lancelot", "Hayabusa", "Ling", "Saber", "Chou", "Fanny", "Helcurt", "Natalia", "Joy", "Kaja", "Franco"]
+  },
+  "Zilong": {
+    "counteredBy": ["Valir", "Ruby", "Akai", "Grock", "Belerick", "Khufra", "Chou", "Franco", "Kaja", "Phoveus"]
+  }
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { COUNTER_DATA };
+}
 
 function getCurrentTurn() {
     if (!draftState || draftState.currentTurnIndex >= DRAFT_SEQUENCE.length) return null;

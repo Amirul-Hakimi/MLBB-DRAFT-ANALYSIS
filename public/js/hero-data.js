@@ -15,7 +15,7 @@ const RAW_HERO_DATASET = [
     { id: "akai", name: "Akai", heroClass: ["Tank"], roles: { Jungle: { pickRate: 0.45 }, Roam: { pickRate: 0.20 } }, banRate: 10.00, winRate: 49.10, powerSpike: "Mid", image: "/assets/heroes/akai.png" },
     { id: "aldous", name: "Aldous", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.03 } }, banRate: 0.01, winRate: 48.90, powerSpike: "Late", image: "/assets/heroes/aldous.png" },
     { id: "alice", name: "Alice", heroClass: ["Mage", "Tank"], roles: { Mid: { pickRate: 0.10 }, EXP: { pickRate: 0.45 } }, banRate: 2.96, winRate: 50.63, powerSpike: "Late", image: "/assets/heroes/alice.png" },
-    { id: "alpha", name: "Alpha", heroClass: ["Fighter"], roles: { Jungle: { pickRate: 0.25 }, EXP: { pickRate: 0.16 } }, banRate: 0.05, winRate: 44.20, powerSpike: "Early", image: "/assets/heroes/alpha.png" },
+    { id: "alpha", name: "Alpha", heroClass: ["Fighter"], roles: { Jungle: { pickRate: 0.25 }, EXP: { pickRate: 0.16 } }, banRate: 0.03, winRate: 44.20, powerSpike: "Early", image: "/assets/heroes/alpha.png" },
     { id: "alucard", name: "Alucard", heroClass: ["Fighter", "Assassin"], roles: { Jungle: { pickRate: 0.01 }, EXP: { pickRate: 0.01 } }, banRate: 0.01, winRate: 49.43, powerSpike: "Mid", image: "/assets/heroes/alucard.png" },
     { id: "angela", name: "Angela", heroClass: ["Support"], roles: { Roam: { pickRate: 0.50 } }, banRate: 5.00, winRate: 48.27, powerSpike: "Mid", image: "/assets/heroes/angela.png" },
     { id: "argus", name: "Argus", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.10 } }, banRate: 0.05, winRate: 52.82, powerSpike: "Late", image: "/assets/heroes/argus.png" },
@@ -198,7 +198,7 @@ const RAW_HERO_DATASET = [
     // T
     // ==========================================
     { id: "terizla", name: "Terizla", heroClass: ["Fighter", "Tank"], roles: { EXP: { pickRate: 0.30 } }, banRate: 0.05, winRate: 49.91, powerSpike: "Early", image: "/assets/heroes/terizla.png" },
-    { id: "thamuz", name: "Thamuz", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.20 } }, banRate: 0.05, winRate: 49.44, powerSpike: "Early", image: "/assets/heroes/thamuz.png" },
+    { id: "thamuz", name: "Thamuz", heroClass: ["Fighter"], roles: { EXP: { pickRate: 0.15 } }, banRate: 0.05, winRate: 49.44, powerSpike: "Early", image: "/assets/heroes/thamuz.png" },
     { id: "tigreal", name: "Tigreal", heroClass: ["Tank", "Support"], roles: { Roam: { pickRate: 0.30 } }, banRate: 0.80, winRate: 44.45, powerSpike: "Mid", image: "/assets/heroes/tigreal.png" },
 
     // ==========================================
