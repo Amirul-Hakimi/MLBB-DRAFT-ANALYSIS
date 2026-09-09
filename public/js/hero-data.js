@@ -237,7 +237,7 @@ const RAW_HERO_DATASET = [
     // Z
     // ==========================================
     { id: "zetian", name: "Zetian", heroClass: ["Mage"], roles: { Mid: { pickRate: 2.11 } }, banRate: 9.04, winRate: 50.13, powerSpike: "Mid", image: "/assets/heroes/zetian.png" },
-    { id: "zhask", name: "Zhask", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.01 } }, banRate: 0.01, winRate: 50.72, powerSpike: "Mid", image: "/assets/heroes/zhask.png" },
+    { id: "zhask", name: "Zhask", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.01 } }, banRate: 0.01, winRate: 48.00, powerSpike: "Mid", image: "/assets/heroes/zhask.png" },
     { id: "zhuxin", name: "Zhuxin", heroClass: ["Mage"], roles: { Mid: { pickRate: 0.40 } }, banRate: 2.00, winRate: 47.42, powerSpike: "Mid", image: "/assets/heroes/zhuxin.png" },
     { id: "zilong", name: "Zilong", heroClass: ["Fighter", "Assassin"], roles: { EXP: { pickRate: 0.01 }, Jungle: { pickRate: 0.01 } }, banRate: 0.01, winRate: 44.52, powerSpike: "Late", image: "/assets/heroes/zilong.png" }
 ];
