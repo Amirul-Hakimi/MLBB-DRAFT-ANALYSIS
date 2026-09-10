@@ -8,8 +8,39 @@ const { HERO_DATASET, getHeroLanes, getHeroPickRate, getHeroBanRate } = require(
 const { evaluateDraftComparison } = require('./public/js/draft-engine.js');
 
 const app = express();
+
+// 1. PRODUCTION PROXY TRUST (Ensures HTTPS / WSS headers function properly on Render/Railway/Heroku/AWS)
+app.enable('trust proxy');
+
+// 2. ENVIRONMENT & CONFIGURATION
+const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) 
+    : '*';
+
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+
+// 3. HARDENED SOCKET.IO CONFIGURATION (Protected buffer sizes, explicit transports, origin control)
+const io = new Server(server, {
+    cors: {
+        origin: ALLOWED_ORIGINS,
+        methods: ["GET", "POST"]
+    },
+    transports: ['websocket', 'polling'],
+    maxHttpBufferSize: 1e5, // 100 KB max payload limit (prevents memory buffer overflow attacks)
+    pingTimeout: 20000,
+    pingInterval: 25000
+});
+
+// Basic timestamped HTTP request logger
+app.use((req, res, next) => {
+    if (NODE_ENV !== 'production') {
+        const timestamp = new Date().toISOString().substring(11, 19);
+        console.log(`[${timestamp}] ${req.method} ${req.url}`);
+    }
+    next();
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -681,12 +712,10 @@ io.on('connection', (socket) => {
             const roomId = socket.currentRoomId;
             const room = activeRooms[roomId];
 
-            // Verify room membership and status
             if (!room || !socket.rooms.has(roomId) || !room.draftState.started || room.draftState.isComplete) {
                 return sendClientError('Invalid action state.', 'draft_error');
             }
 
-            // Verify hero existence in master dataset
             if (!VALID_HERO_IDS.has(heroId)) {
                 return sendClientError('Selected hero identifier does not exist.', 'draft_error');
             }
@@ -698,12 +727,10 @@ io.on('connection', (socket) => {
             const draft = room.draftState;
             const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
 
-            // Enforce authoritative turn ordering
             if (!currentTurn || currentTurn.team !== playerTeam) {
                 return sendClientError('Action rejected: It is not your turn.', 'draft_error');
             }
 
-            // Check availability: hero cannot be already banned or picked
             const allBanned = [...draft.bans.A, ...draft.bans.B].filter(Boolean).map(h => h.id.toLowerCase());
             const allPicked = [...draft.picks.A, ...draft.picks.B].filter(Boolean).map(h => h.id.toLowerCase());
             if (allBanned.includes(heroId) || allPicked.includes(heroId)) {
@@ -902,7 +929,16 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
+// 4. GLOBAL PROCESS CRASH GUARDS (Prevents unhandled errors from taking down the entire Node.js server)
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL UNCAUGHT EXCEPTION]:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[UNHANDLED PROMISE REJECTION]:', reason);
+});
+
+// Start Server
 server.listen(PORT, () => {
-    console.log(`MLBB Authoritative Server running at http://localhost:${PORT}`);
+    console.log(`MLBB Authoritative Server running in [${NODE_ENV}] mode on http://localhost:${PORT}`);
 });
