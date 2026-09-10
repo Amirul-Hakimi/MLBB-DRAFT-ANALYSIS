@@ -1,4 +1,4 @@
-# MLBB Draft Arena
+# MLBB DRAFT ANALYSIS
 
 A real-time Mobile Legends: Bang Bang draft simulator designed to help players practise, compare, and analyse hero drafting decisions.
 
@@ -8,7 +8,7 @@ MLBB Draft Arena supports tournament-style ban and pick phases, hero recommendat
 
 ## Overview
 
-**MLBB Draft Arena** is a web-based draft simulation and analysis tool inspired by competitive Mobile Legends: Bang Bang drafting.
+**MLBB DRAFT ANALYSIS** is a web-based draft simulation and analysis tool inspired by competitive Mobile Legends: Bang Bang drafting.
 
 The project was developed as a full-stack application with a focus on:
 
@@ -405,26 +405,30 @@ The application follows a client-server architecture.
 The exact structure may vary depending on the current implementation, but the project is organized around frontend, server, draft logic, hero data and supporting systems.
 
 ```text
-mlbb-draft-arena/
-│
+MLBB-DRAFT-ANALYSIS/
+├── docs/
+│   └── screenshots/
+│       ├── draft-evaluation.png
+│       ├── draft-interface.png
+│       └── main-page.png
 ├── public/
-│   ├── index.html
+│   ├── assets/
+│   │   └── heroes/
 │   ├── css/
-│   │   └── ...
+│   │   └── style.css
 │   ├── js/
-│   │   └── ...
-│   └── assets/
-│
-├── server/
-│   └── ...
-│
+│   │   ├── draft-engine.js
+│   │   ├── hero-data.js
+│   │   └── main.js
+│   └── index.html
 ├── data/
-│   └── ...
-│
+├── .env.example
+├── .gitignore
+├── download-heroes.js
 ├── package.json
 ├── package-lock.json
-├── .gitignore
-└── README.md
+├── README.md
+└── server.js
 ```
 
 > The structure above represents the project's logical organization. Refer to the actual repository files for the current implementation-specific structure.
@@ -444,13 +448,13 @@ Before running the project locally, install:
 ### Clone the repository
 
 ```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
+git https://github.com/Amirul-Hakimi/MLBB-DRAFT-ANALYSIS.git
 ```
 
 Move into the project directory:
 
 ```bash
-cd mlbb-draft-arena
+cd MLBB-DRAFT-ANALYSIS
 ```
 
 ### Install dependencies
@@ -653,43 +657,20 @@ These features are not part of the current implementation unless explicitly impl
 
 ## Screenshots
 
-### Draft Interface
 
-Add a screenshot of the main draft interface here.
 
-```text
-docs/screenshots/draft-interface.png
-```
 
-Example Markdown:
+### Main Page
 
-```markdown
+![Main Page](docs/screenshots/main-page.png)
+
+### Drafting Phase
+
 ![Draft Interface](docs/screenshots/draft-interface.png)
-```
-
-### Multiplayer Lobby
-
-Add a screenshot showing two players inside the same room.
-
-```text
-docs/screenshots/multiplayer-lobby.png
-```
 
 ### Draft Analysis
 
-Add a screenshot of the completed draft comparison.
-
-```text
-docs/screenshots/draft-analysis.png
-```
-
-### AI Draft
-
-Add a screenshot showing the AI drafting interface.
-
-```text
-docs/screenshots/ai-draft.png
-```
+![Draft Evaluation](docs/screenshots/draft-evaluation.png)
 
 ---
 
