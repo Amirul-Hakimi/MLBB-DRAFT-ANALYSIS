@@ -2,8 +2,10 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const crypto = require('crypto');
 
 const { HERO_DATASET, getHeroLanes, getHeroPickRate, getHeroBanRate } = require('./public/js/hero-data.js');
+const { evaluateDraftComparison } = require('./public/js/draft-engine.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -14,10 +16,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Configuration Constants
 const AI_DECISION_DELAY_MS = 1000;
 const SIM_AUTO_INTERVAL_MS = 1000;
-const TURN_TIMEOUT_SECONDS = 30; // Authoritative 30s turn limit
+const TURN_TIMEOUT_SECONDS = 30;
 const PVP_DISCONNECT_TIMEOUT_MS = 30000;
 const ROOM_INACTIVITY_EXPIRY_MS = 30 * 60 * 1000;
 const EMPTY_ROOM_EXPIRY_MS = 60 * 1000;
+
+// Rate Limiter Settings
+const RATE_LIMIT_WINDOW_MS = 1000;
+const MAX_EVENTS_PER_WINDOW = 15;
+
+// Valid Hero ID Lookup Set
+const VALID_HERO_IDS = new Set(HERO_DATASET.map(h => h.id.toLowerCase()));
 
 // 20-Step Draft Sequence Rules
 const DRAFT_SEQUENCE = [
@@ -54,13 +63,14 @@ function sanitizeString(input, maxLen = 20) {
     return input.trim().replace(/[^a-zA-Z0-9_-]/g, '').substring(0, maxLen);
 }
 
-function generateUniqueRoomId() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateCryptographicRoomId() {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let result = '';
     do {
         result = '';
+        const bytes = crypto.randomBytes(6);
         for (let i = 0; i < 6; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
+            result += chars[bytes[i] % chars.length];
         }
     } while (activeRooms[result]);
     return result;
@@ -76,7 +86,8 @@ function createFreshDraftState(currentVersion = 1) {
         turnExpiresAt: null,
         bans: { A: [], B: [] },
         picks: { A: [], B: [] },
-        draftLog: []
+        draftLog: [],
+        evaluation: null
     };
 }
 
@@ -144,7 +155,8 @@ function recordCompletedDraft(room) {
             A: [...(room.draftState.picks?.A || [])],
             B: [...(room.draftState.picks?.B || [])]
         },
-        draftLog: [...(room.draftState.draftLog || [])]
+        draftLog: [...(room.draftState.draftLog || [])],
+        evaluation: room.draftState.evaluation || null
     };
 
     temporaryDraftHistory.unshift(historyEntry);
@@ -164,7 +176,6 @@ function destroyRoom(roomId, reason = 'Room closed.') {
     delete activeRooms[roomId];
 }
 
-// Server-Authoritative Turn Timer Generator
 function startServerTurnTimer(roomId) {
     const room = activeRooms[roomId];
     if (!room || !room.draftState || !room.draftState.started || room.draftState.isComplete) return;
@@ -183,6 +194,39 @@ function startServerTurnTimer(roomId) {
     room.turnTimer = setTimeout(() => {
         handleTurnTimeout(roomId);
     }, TURN_TIMEOUT_SECONDS * 1000);
+}
+
+function finalizeDraft(room, roomId) {
+    room.draftState.isComplete = true;
+    room.status = 'completed';
+
+    if (room.turnTimer) {
+        clearTimeout(room.turnTimer);
+        room.turnTimer = null;
+    }
+    if (room.simInterval) {
+        clearInterval(room.simInterval);
+        room.simInterval = null;
+    }
+    if (room.aiTimer) {
+        clearTimeout(room.aiTimer);
+        room.aiTimer = null;
+    }
+
+    if (typeof evaluateDraftComparison === 'function') {
+        try {
+            room.draftState.evaluation = evaluateDraftComparison(
+                room.draftState.picks.A,
+                room.draftState.bans.A,
+                room.draftState.picks.B,
+                room.draftState.bans.B
+            );
+        } catch (e) {
+            console.error('[EVALUATION ERROR]', e);
+        }
+    }
+
+    recordCompletedDraft(room);
 }
 
 function performRoomReset(room, roomId) {
@@ -245,10 +289,8 @@ function computeAIMoveForTeam(draftState, activeTeam) {
     const myOpenLanes = getOpenLanesForTeam(draftState.picks[activeTeam]);
     const opponentOpenLanes = getOpenLanesForTeam(draftState.picks[opponentTeam]);
 
-    // 1. AI BANNING: Deny the opponent's unfilled lanes
     if (currentTurn.action === 'ban') {
         let banCandidates = availableHeroes;
-
         if (opponentOpenLanes.length > 0 && opponentOpenLanes.length < 5) {
             const laneDenialCandidates = availableHeroes.filter(hero => {
                 const lanes = (typeof getHeroLanes === 'function') ? getHeroLanes(hero) : (hero.lanes || []);
@@ -258,11 +300,9 @@ function computeAIMoveForTeam(draftState, activeTeam) {
                 banCandidates = laneDenialCandidates;
             }
         }
-
         return selectWeightedRandomHero(banCandidates, h => getHeroBanRate(h));
     }
 
-    // 2. AI PICKING: Strictly pick heroes that fit the team's remaining open lanes
     let pickCandidates = availableHeroes;
     if (myOpenLanes.length > 0) {
         const laneMatchingCandidates = availableHeroes.filter(hero => {
@@ -298,9 +338,7 @@ function handleTurnTimeout(roomId) {
 
     room.lastActivity = Date.now();
 
-    // Inside handleTurnTimeout(roomId) in server.js
     if (currentTurn.action === 'ban') {
-        // Push a placeholder object so ban array length stays exact
         const skippedBanObj = { id: 'skipped', name: 'Skipped', isSkipped: true };
         draft.bans[currentTurn.team].push(skippedBanObj);
 
@@ -312,7 +350,6 @@ function handleTurnTimeout(roomId) {
             hero: 'None (Timeout)'
         });
     } else {
-        // Auto-pick
         const autoHero = computeAIMoveForTeam(draft, currentTurn.team);
         if (autoHero) {
             draft.picks[currentTurn.team].push(autoHero);
@@ -330,9 +367,7 @@ function handleTurnTimeout(roomId) {
     draft.version = (draft.version || 0) + 1;
 
     if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
-        draft.isComplete = true;
-        room.status = 'completed';
-        recordCompletedDraft(room);
+        finalizeDraft(room, roomId);
     } else {
         startServerTurnTimer(roomId);
     }
@@ -383,13 +418,7 @@ function executeDraftStep(roomId) {
     draft.version = (draft.version || 0) + 1;
 
     if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
-        draft.isComplete = true;
-        room.status = 'completed';
-        if (room.simInterval) {
-            clearInterval(room.simInterval);
-            room.simInterval = null;
-        }
-        recordCompletedDraft(room);
+        finalizeDraft(room, roomId);
     } else {
         startServerTurnTimer(roomId);
     }
@@ -441,17 +470,35 @@ setInterval(() => {
     });
 }, 60000);
 
-// Sockets
+// Socket Event Handlers
 io.on('connection', (socket) => {
+    // Lightweight In-Memory Rate Limiter Guard
+    socket.use(([event, ...args], next) => {
+        const now = Date.now();
+        if (!socket.rateLimit) {
+            socket.rateLimit = { start: now, count: 0 };
+        }
+        if (now - socket.rateLimit.start > RATE_LIMIT_WINDOW_MS) {
+            socket.rateLimit.start = now;
+            socket.rateLimit.count = 0;
+        }
+        socket.rateLimit.count++;
+        if (socket.rateLimit.count > MAX_EVENTS_PER_WINDOW) {
+            return socket.emit('app_error', { message: 'Action rejected: Event rate limit exceeded.' });
+        }
+        next();
+    });
+
     function sendClientError(message, eventName = 'app_error') {
         socket.emit(eventName, { message });
     }
 
     socket.on('create_room', (payload) => {
         try {
+            if (!payload || typeof payload !== 'object') return sendClientError('Invalid payload.', 'room_error');
             const playerToken = sanitizeString(payload.playerToken, 32);
             const mode = ['pvp', 'vs_ai', 'auto_sim'].includes(payload.mode) ? payload.mode : 'vs_ai';
-            const roomId = generateUniqueRoomId();
+            const roomId = generateCryptographicRoomId();
 
             activeRooms[roomId] = {
                 roomId: roomId,
@@ -502,6 +549,7 @@ io.on('connection', (socket) => {
 
     socket.on('join_room', (payload) => {
         try {
+            if (!payload || typeof payload !== 'object') return sendClientError('Invalid payload.', 'room_error');
             const cleanRoomId = sanitizeString(payload.targetRoomId, 6).toUpperCase();
             const playerToken = sanitizeString(payload.playerToken, 32);
             const room = activeRooms[cleanRoomId];
@@ -603,7 +651,7 @@ io.on('connection', (socket) => {
     socket.on('toggle_ready', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'pvp') return;
+        if (!room || !socket.rooms.has(roomId) || room.mode !== 'pvp') return;
 
         const team = socket.assignedTeam;
         if (!team || !room.players || !room.players[team]) return;
@@ -633,19 +681,34 @@ io.on('connection', (socket) => {
             const roomId = socket.currentRoomId;
             const room = activeRooms[roomId];
 
-            if (!room || !room.draftState.started || room.draftState.isComplete) return;
+            // Verify room membership and status
+            if (!room || !socket.rooms.has(roomId) || !room.draftState.started || room.draftState.isComplete) {
+                return sendClientError('Invalid action state.', 'draft_error');
+            }
+
+            // Verify hero existence in master dataset
+            if (!VALID_HERO_IDS.has(heroId)) {
+                return sendClientError('Selected hero identifier does not exist.', 'draft_error');
+            }
+
+            const hero = HERO_DATASET.find(h => h.id.toLowerCase() === heroId);
+            if (!hero) return;
 
             const playerTeam = socket.assignedTeam;
             const draft = room.draftState;
             const currentTurn = DRAFT_SEQUENCE[draft.currentTurnIndex];
-            if (!currentTurn || currentTurn.team !== playerTeam) return;
 
-            const hero = HERO_DATASET.find(h => h.id === heroId);
-            if (!hero) return;
+            // Enforce authoritative turn ordering
+            if (!currentTurn || currentTurn.team !== playerTeam) {
+                return sendClientError('Action rejected: It is not your turn.', 'draft_error');
+            }
 
-            const allBanned = [...draft.bans.A, ...draft.bans.B].filter(Boolean).map(h => h.id);
-            const allPicked = [...draft.picks.A, ...draft.picks.B].filter(Boolean).map(h => h.id);
-            if (allBanned.includes(heroId) || allPicked.includes(heroId)) return;
+            // Check availability: hero cannot be already banned or picked
+            const allBanned = [...draft.bans.A, ...draft.bans.B].filter(Boolean).map(h => h.id.toLowerCase());
+            const allPicked = [...draft.picks.A, ...draft.picks.B].filter(Boolean).map(h => h.id.toLowerCase());
+            if (allBanned.includes(heroId) || allPicked.includes(heroId)) {
+                return sendClientError('Action rejected: Hero is unavailable (already picked or banned).', 'draft_error');
+            }
 
             if (room.turnTimer) {
                 clearTimeout(room.turnTimer);
@@ -672,9 +735,7 @@ io.on('connection', (socket) => {
             draft.version = (draft.version || 0) + 1;
 
             if (draft.currentTurnIndex >= DRAFT_SEQUENCE.length) {
-                draft.isComplete = true;
-                room.status = 'completed';
-                recordCompletedDraft(room);
+                finalizeDraft(room, roomId);
             } else {
                 startServerTurnTimer(roomId);
             }
@@ -696,7 +757,7 @@ io.on('connection', (socket) => {
     socket.on('send_chat_message', (payload) => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'pvp' || !payload || typeof payload.text !== 'string') return;
+        if (!room || !socket.rooms.has(roomId) || room.mode !== 'pvp' || !payload || typeof payload.text !== 'string') return;
 
         const cleanText = payload.text.trim().substring(0, 150);
         if (!cleanText) return;
@@ -711,14 +772,14 @@ io.on('connection', (socket) => {
     socket.on('sim_step', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode === 'pvp') return;
+        if (!room || !socket.rooms.has(roomId) || room.mode === 'pvp') return;
         executeDraftStep(roomId);
     });
 
     socket.on('sim_start_auto', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode === 'pvp' || room.simInterval) return;
+        if (!room || !socket.rooms.has(roomId) || room.mode === 'pvp' || room.simInterval) return;
 
         room.simInterval = setInterval(() => {
             if (!activeRooms[roomId] || room.draftState.isComplete) {
@@ -733,7 +794,7 @@ io.on('connection', (socket) => {
     socket.on('sim_pause_auto', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || !room.simInterval) return;
+        if (!room || !socket.rooms.has(roomId) || !room.simInterval) return;
         clearInterval(room.simInterval);
         room.simInterval = null;
     });
@@ -745,14 +806,14 @@ io.on('connection', (socket) => {
     socket.on('request_rematch', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room) return;
+        if (!room || !socket.rooms.has(roomId)) return;
         performRoomReset(room, roomId);
     });
 
     socket.on('request_reset', () => {
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room) return;
+        if (!room || !socket.rooms.has(roomId)) return;
 
         if (room.mode !== 'pvp') {
             performRoomReset(room, roomId);
@@ -773,10 +834,12 @@ io.on('connection', (socket) => {
         socket.emit('reset_status', { message: 'Reset request sent. Waiting for opponent confirmation...' });
     });
 
-    socket.on('respond_reset', ({ approved }) => {
+    socket.on('respond_reset', (payload) => {
+        if (!payload || typeof payload !== 'object') return;
+        const { approved } = payload;
         const roomId = socket.currentRoomId;
         const room = activeRooms[roomId];
-        if (!room || room.mode !== 'pvp' || !room.pendingResetBy) return;
+        if (!room || !socket.rooms.has(roomId) || room.mode !== 'pvp' || !room.pendingResetBy) return;
 
         const requesterTeam = room.pendingResetBy;
         const requester = room.players[requesterTeam];
@@ -794,7 +857,7 @@ io.on('connection', (socket) => {
 
     socket.on('leave_room', () => {
         const roomId = socket.currentRoomId;
-        if (roomId && activeRooms[roomId]) {
+        if (roomId && activeRooms[roomId] && socket.rooms.has(roomId)) {
             destroyRoom(roomId, 'A player manually left the lobby.');
         }
     });
